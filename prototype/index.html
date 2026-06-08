@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pacto dos Lendários - Alpha</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app">
+    <section id="menuScreen" class="screen menu-screen active" aria-label="Menu inicial">
+      <div class="menu-atmosphere" aria-hidden="true"></div>
+      <div class="menu-shell">
+        <p class="eyebrow">Protótipo Alpha Local</p>
+        <h1>Pacto dos Lendários</h1>
+        <p class="menu-subtitle">Kael Drakar e Nereia Val'Kora disputam o destino dos reinos antigos.</p>
+        <div class="menu-actions">
+          <button type="button" id="startMenuButton" class="primary-action">Jogar</button>
+          <button type="button" id="decksMenuButton">Baralhos</button>
+          <button type="button" id="howToMenuButton">Como Jogar</button>
+          <button type="button" id="settingsMenuButton">Configurações</button>
+          <button type="button" id="collectionMenuButton" class="minor-action">Coleção</button>
+          <button type="button" id="creditsMenuButton" class="minor-action">Créditos</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="heroScreen" class="screen hero-screen" aria-label="Seleção de herói">
+      <header class="screen-header">
+        <button type="button" class="ghost-button" data-screen="menu">Voltar</button>
+        <div>
+          <p class="eyebrow">Escolha seu pacto</p>
+          <h2>Seleção de Herói</h2>
+        </div>
+      </header>
+
+      <div class="hero-choice-grid">
+        <button type="button" class="hero-choice fire-choice" data-select-hero="fire">
+          <img src="../cards/heroes/Kael.png" alt="Kael Drakar">
+          <span class="choice-body">
+            <span class="eyebrow">Elemento Fogo</span>
+            <strong>Kael Drakar, o Rei das Chamas Eternas</strong>
+            <span>Agressão, dano e sacrifício</span>
+          </span>
+        </button>
+
+        <button type="button" class="hero-choice water-choice" data-select-hero="water">
+          <img src="../cards/heroes/nereia.png" alt="Nereia Val'Kora">
+          <span class="choice-body">
+            <span class="eyebrow">Elemento Água</span>
+            <strong>Nereia Val'Kora, A Mãe das Profundezas</strong>
+            <span>Cura, controle e resistência</span>
+          </span>
+        </button>
+      </div>
+    </section>
+
+    <section id="decksScreen" class="screen content-screen" aria-label="Construção de Deck">
+      <header class="screen-header">
+        <button type="button" class="ghost-button" data-screen="menu">Voltar</button>
+        <div>
+          <p class="eyebrow">Oficina arcana</p>
+          <h2>Construção de Deck</h2>
+        </div>
+      </header>
+      <div id="deckLists" class="deck-lists"></div>
+    </section>
+
+    <section id="collectionScreen" class="screen content-screen" aria-label="Coleção">
+      <header class="screen-header">
+        <button type="button" class="ghost-button" data-screen="menu">Voltar</button>
+        <div>
+          <p class="eyebrow">Arquivo dos pactos</p>
+          <h2>Coleção</h2>
+        </div>
+      </header>
+
+      <div class="feature-panel">
+        <h3>Cartas Disponíveis</h3>
+        <p>O protótipo já contém dois conjuntos jogáveis: Fogo e Água. Use Construção de Deck para consultar as listas completas enquanto a coleção visual é expandida.</p>
+      </div>
+    </section>
+
+    <section id="settingsScreen" class="screen content-screen" aria-label="Configurações">
+      <header class="screen-header">
+        <button type="button" class="ghost-button" data-screen="menu">Voltar</button>
+        <div>
+          <p class="eyebrow">Preferências</p>
+          <h2>Configurações</h2>
+        </div>
+      </header>
+
+      <div class="feature-panel settings-panel">
+        <label>
+          <span>Partículas e névoa</span>
+          <input type="checkbox" checked disabled>
+        </label>
+        <label>
+          <span>Animações de combate</span>
+          <input type="checkbox" checked disabled>
+        </label>
+        <div class="audio-settings">
+          <button type="button" id="soundToggleButton" class="sound-toggle" aria-pressed="false">Som: desligado</button>
+          <label>
+            <span>Volume</span>
+            <input type="range" id="volumeSlider" min="0" max="100" value="55">
+          </label>
+        </div>
+        <p>Áudio e opções avançadas ficam preparados para quando houver assets próprios no projeto.</p>
+      </div>
+    </section>
+
+    <section id="creditsScreen" class="screen content-screen" aria-label="Créditos">
+      <header class="screen-header">
+        <button type="button" class="ghost-button" data-screen="menu">Voltar</button>
+        <div>
+          <p class="eyebrow">Crônicas</p>
+          <h2>Créditos</h2>
+        </div>
+      </header>
+
+      <div class="feature-panel">
+        <h3>Pacto dos Lendários</h3>
+        <p>Protótipo alpha local com arte de cartas e cenários fornecidos pelo projeto. Interface refeita com foco em clareza, fantasia medieval e sensação de card game profissional.</p>
+      </div>
+    </section>
+
+    <section id="howToScreen" class="screen content-screen" aria-label="Como jogar">
+      <header class="screen-header">
+        <button type="button" class="ghost-button" data-screen="menu">Voltar</button>
+        <div>
+          <p class="eyebrow">Regras base</p>
+          <h2>Como Jogar</h2>
+        </div>
+      </header>
+
+      <div class="rules-panel">
+        <ul>
+          <li>Reduza a Vida do Herói inimigo a 0.</li>
+          <li>Invoque Pactos, use Magias e controle o campo.</li>
+          <li>Ataque Pactos inimigos ou o Herói quando o campo adversário estiver vazio.</li>
+          <li>Pactos recém-invocados podem atacar Pactos, mas não podem atacar diretamente no mesmo turno.</li>
+          <li>Cada Herói começa com 20 Vida, 5 Mana máxima, 5 Mana atual e 3 cartas.</li>
+          <li>No início do turno, a Mana máxima aumenta em +1, a Mana atual enche, o jogador compra 1 carta e seus Pactos curam 1 de Vida.</li>
+          <li>O limite de mão é 7 cartas. No final do turno, cartas excedentes são descartadas automaticamente.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="battleScreen" class="screen battle-screen" aria-label="Batalha">
+      <div id="turnSplash" class="turn-splash" aria-hidden="true"></div>
+      <aside id="cardDetailPanel" class="card-detail-panel" aria-label="Detalhes da Carta">
+        <p class="eyebrow">Grimório</p>
+        <div class="detail-empty">Passe o mouse sobre uma carta para abrir o grimório.</div>
+      </aside>
+
+      <div class="battle-table">
+        <div id="botArea" class="player-board bot-board"></div>
+
+        <section class="battle-banner" aria-label="Área de batalha">
+          <div class="turn-copy">
+            <p class="eyebrow">Área de Batalha</p>
+            <h2 id="turnTitle">Pacto dos Lendários</h2>
+            <p id="statusText" class="status-text">Aguardando partida...</p>
+          </div>
+          <div class="battle-actions">
+            <button type="button" id="endTurnButton">Encerrar Turno</button>
+            <button type="button" id="toggleLogButton" aria-expanded="false">Log</button>
+            <button type="button" id="toggleRulesButton" aria-expanded="false">Regras</button>
+            <button type="button" id="backToMenuButton">Menu</button>
+          </div>
+        </section>
+
+        <div id="humanArea" class="player-board human-board"></div>
+      </div>
+
+      <div class="floating-panels" aria-live="polite">
+        <section id="logDrawer" class="floating-panel log-panel" aria-label="Log da partida" hidden>
+          <h3>Log da Partida</h3>
+          <div id="gameLog" class="game-log"></div>
+        </section>
+
+        <section id="rulesDrawer" class="floating-panel quick-rules" aria-label="Regras rápidas" hidden>
+          <h3>Regras Rápidas</h3>
+          <ul>
+            <li>Reduza a Vida do Herói inimigo a 0.</li>
+            <li>Pactos novos atacam Pactos, mas não o Herói.</li>
+            <li>Ataque direto só com o campo inimigo vazio.</li>
+            <li>Mana máxima aumenta +1 por turno.</li>
+            <li>Limite de mão: 7 cartas.</li>
+          </ul>
+        </section>
+      </div>
+    </section>
+
+    <section id="resultScreen" class="screen result-screen" aria-label="Resultado">
+      <div class="result-panel">
+        <p class="eyebrow">Fim da partida</p>
+        <h2 id="resultTitle">Resultado</h2>
+        <p id="resultText"></p>
+        <div class="menu-actions">
+          <button type="button" id="resultRestartButton">Jogar Novamente</button>
+          <button type="button" id="resultMenuButton">Voltar ao Menu</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
