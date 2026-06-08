@@ -2,27 +2,27 @@ const MAX_FIELD = 3;
 const MAX_HAND = 7;
 const BOT_DELAY = 520;
 const ICON_ASSETS = {
-  vida: "../assets/icons/vida.jpeg",
-  mana: "../assets/icons/mana.jpeg",
-  sanidade: "../assets/icons/sanidade.jpeg",
-  ataque: "../assets/icons/ataque.jpeg",
-  vida_pacto: "../assets/icons/vida_pacto.jpeg",
-  fragmento_alma: "../assets/icons/fragmento_alma.jpeg",
-  deck: "../assets/icons/deck.jpeg",
-  abismo: "../assets/icons/abismo.jpeg"
+  vida: "assets/icons/vida.jpeg",
+  mana: "assets/icons/mana.jpeg",
+  sanidade: "assets/icons/sanidade.jpeg",
+  ataque: "assets/icons/ataque.jpeg",
+  vida_pacto: "assets/icons/vida_pacto.jpeg",
+  fragmento_alma: "assets/icons/fragmento_alma.jpeg",
+  deck: "assets/icons/deck.jpeg",
+  abismo: "assets/icons/abismo.jpeg"
 };
 const AUDIO_ASSETS = {
-  menu: "../assets/audio/menu_theme.mp3",
-  battle: "../assets/audio/battle_ambient.mp3",
-  draw: "../assets/audio/draw.wav",
-  summon: "../assets/audio/summon.wav",
-  attack: "../assets/audio/attack.wav",
-  damage: "../assets/audio/damage.wav",
-  heal: "../assets/audio/heal.wav",
-  destroy: "../assets/audio/destroy.wav",
-  endTurn: "../assets/audio/end_turn.wav",
-  victory: "../assets/audio/victory.wav",
-  defeat: "../assets/audio/defeat.wav"
+  menu: "assets/audio/menu_theme.mp3",
+  battle: "assets/audio/battle_ambient.mp3",
+  draw: "assets/audio/draw.wav",
+  summon: "assets/audio/summon.wav",
+  attack: "assets/audio/attack.wav",
+  damage: "assets/audio/damage.wav",
+  heal: "assets/audio/heal.wav",
+  destroy: "assets/audio/destroy.wav",
+  endTurn: "assets/audio/end_turn.wav",
+  victory: "assets/audio/victory.wav",
+  defeat: "assets/audio/defeat.wav"
 };
 const THEME_CLASSES = [
   "theme-fire",
@@ -44,7 +44,7 @@ const CARD_DEFS = {
     cost: 1,
     attack: 2,
     health: 1,
-    image: "../cards/fire/cinzamor.png",
+    image: "cards/fire/cinzamor.png",
     effect: "Quando entra em campo, cause 1 de dano a um Pacto inimigo."
   },
   ignivar: {
@@ -55,7 +55,7 @@ const CARD_DEFS = {
     cost: 2,
     attack: 3,
     health: 2,
-    image: "../cards/fire/ignivar.png",
+    image: "cards/fire/ignivar.png",
     effect: "Quando destruir outro Pacto em combate, receba 1 Mana."
   },
   braseon: {
@@ -66,7 +66,7 @@ const CARD_DEFS = {
     cost: 3,
     attack: 4,
     health: 4,
-    image: "../cards/fire/braseon.png",
+    image: "cards/fire/braseon.png",
     effect: "Enquanto estiver em campo, outros Pactos de Fogo aliados recebem +1 Ataque."
   },
   rubrakar: {
@@ -77,7 +77,7 @@ const CARD_DEFS = {
     cost: 4,
     attack: 4,
     health: 6,
-    image: "../cards/fire/rubrakar.png",
+    image: "cards/fire/rubrakar.png",
     effect: "A primeira vez que outro Pacto de Fogo aliado seria destruído a cada turno, ele sobrevive com 1 Vida."
   },
   varkhan: {
@@ -88,7 +88,7 @@ const CARD_DEFS = {
     cost: 4,
     attack: 6,
     health: 4,
-    image: "../cards/fire/varkhan.png",
+    image: "cards/fire/varkhan.png",
     effect: "Sempre que atacar, recebe +1 Ataque até o final do turno para cada outro Pacto de Fogo aliado."
   },
   solferro: {
@@ -99,7 +99,7 @@ const CARD_DEFS = {
     cost: 5,
     attack: 7,
     health: 5,
-    image: "../cards/fire/solferro.png",
+    image: "cards/fire/solferro.png",
     effect: "Quando entrar em campo, cause 2 de dano a todos os Pactos inimigos."
   },
   devorabrasa: {
@@ -110,7 +110,7 @@ const CARD_DEFS = {
     cost: 6,
     attack: 8,
     health: 7,
-    image: "../cards/fire/devorabrasa.png",
+    image: "cards/fire/devorabrasa.png",
     effect: "Quando entrar em campo, destrua um Pacto inimigo com 3 de Vida ou menos."
   },
   chuvaBrasas: {
@@ -119,7 +119,7 @@ const CARD_DEFS = {
     type: "spell",
     element: "fire",
     cost: 2,
-    image: "../cards/spells/fire/chuva_de_brasas.png",
+    image: "cards/spells/fire/chuva_de_brasas.png",
     effect: "Cause 2 de dano a um Pacto inimigo."
   },
   furiaVulcanica: {
@@ -128,7 +128,7 @@ const CARD_DEFS = {
     type: "spell",
     element: "fire",
     cost: 3,
-    image: "../cards/spells/fire/furia_vulcanica.png",
+    image: "cards/spells/fire/furia_vulcanica.png",
     effect: "Um Pacto de Fogo aliado recebe +3 Ataque até o final do turno."
   },
   ritualSetimaChama: {
@@ -137,7 +137,7 @@ const CARD_DEFS = {
     type: "spell",
     element: "fire",
     cost: 4,
-    image: "../cards/spells/fire/ritual_da_setima_chama.png",
+    image: "cards/spells/fire/ritual_da_setima_chama.png",
     effect: "Compre 2 cartas. Depois ganhe 1 de Sanidade."
   },
   fornalhaInsaciavel: {
@@ -146,7 +146,7 @@ const CARD_DEFS = {
     type: "spell",
     element: "fire",
     cost: 4,
-    image: "../cards/spells/fire/fornalha_insaciavel.png",
+    image: "cards/spells/fire/fornalha_insaciavel.png",
     effect: "Destrua um Pacto aliado. Receba 3 Mana."
   },
   apocalipseCarmesim: {
@@ -155,7 +155,7 @@ const CARD_DEFS = {
     type: "spell",
     element: "fire",
     cost: 6,
-    image: "../cards/spells/fire/apocalipse_carmesim.png",
+    image: "cards/spells/fire/apocalipse_carmesim.png",
     effect: "Cause 3 de dano a todos os Pactos inimigos."
   },
   thalora: {
@@ -166,7 +166,7 @@ const CARD_DEFS = {
     cost: 1,
     attack: 1,
     health: 3,
-    image: "../cards/water/thalora.png",
+    image: "cards/water/thalora.png",
     effect: "Quando entrar em campo, cure 1 de Vida de um Pacto aliado."
   },
   nauren: {
@@ -177,7 +177,7 @@ const CARD_DEFS = {
     cost: 2,
     attack: 2,
     health: 3,
-    image: "../cards/water/nauren.png",
+    image: "cards/water/nauren.png",
     effect: "Quando entrar em campo, compre 1 carta."
   },
   marem: {
@@ -188,7 +188,7 @@ const CARD_DEFS = {
     cost: 2,
     attack: 3,
     health: 2,
-    image: "../cards/water/marem.png",
+    image: "cards/water/marem.png",
     effect: "Sempre que atacar, recebe +1 Vida até o início do próximo turno do dono."
   },
   lysora: {
@@ -199,7 +199,7 @@ const CARD_DEFS = {
     cost: 3,
     attack: 3,
     health: 5,
-    image: "../cards/water/lysora.png",
+    image: "cards/water/lysora.png",
     effect: "Enquanto estiver em campo, outros Pactos de Água aliados recebem +1 Vida."
   },
   nereth: {
@@ -210,7 +210,7 @@ const CARD_DEFS = {
     cost: 4,
     attack: 4,
     health: 5,
-    image: "../cards/water/nereth.png",
+    image: "cards/water/nereth.png",
     effect: "Quando entrar em campo, devolva um Pacto inimigo com custo 2 ou menos para a mão do dono."
   },
   velkaris: {
@@ -221,7 +221,7 @@ const CARD_DEFS = {
     cost: 5,
     attack: 5,
     health: 7,
-    image: "../cards/water/velkaris.png",
+    image: "cards/water/velkaris.png",
     effect: "Quando entrar em campo, um Pacto inimigo recebe -2 Ataque até o final do próximo turno do oponente."
   },
   umbraMar: {
@@ -232,7 +232,7 @@ const CARD_DEFS = {
     cost: 4,
     attack: 5,
     health: 4,
-    image: "../cards/water/umbra_mar.png",
+    image: "cards/water/umbra_mar.png",
     effect: "Sempre que causar dano a um Pacto inimigo, cure 1 de Vida do Herói aliado."
   },
   mareRestauradora: {
@@ -241,7 +241,7 @@ const CARD_DEFS = {
     type: "spell",
     element: "water",
     cost: 2,
-    image: "../cards/spells/water/mare_restauradora.png",
+    image: "cards/spells/water/mare_restauradora.png",
     effect: "Cure 3 de Vida de um Pacto aliado."
   },
   correnteRetorno: {
@@ -250,7 +250,7 @@ const CARD_DEFS = {
     type: "spell",
     element: "water",
     cost: 3,
-    image: "../cards/spells/water/corrente_de_retorno.png",
+    image: "cards/spells/water/corrente_de_retorno.png",
     effect: "Devolva um Pacto inimigo para a mão do dono."
   },
   cancaoAbissal: {
@@ -259,7 +259,7 @@ const CARD_DEFS = {
     type: "spell",
     element: "water",
     cost: 3,
-    image: "../cards/spells/water/cancao_abissal.png",
+    image: "cards/spells/water/cancao_abissal.png",
     effect: "Compre 2 cartas."
   },
   escudoMares: {
@@ -268,7 +268,7 @@ const CARD_DEFS = {
     type: "spell",
     element: "water",
     cost: 4,
-    image: "../cards/spells/water/escudo_das_mares.png",
+    image: "cards/spells/water/escudo_das_mares.png",
     effect: "Um Pacto aliado recebe +3 Vida até o final do próximo turno."
   },
   julgamentoLeviata: {
@@ -277,7 +277,7 @@ const CARD_DEFS = {
     type: "spell",
     element: "water",
     cost: 6,
-    image: "../cards/spells/water/julgamento_do_leviata.png",
+    image: "cards/spells/water/julgamento_do_leviata.png",
     effect: "Cause 4 de dano a um Pacto inimigo."
   },
   reiChamas: {
@@ -288,7 +288,7 @@ const CARD_DEFS = {
     cost: 7,
     attack: 5,
     health: 10,
-    image: "../cards/primordials/rei_das_chamas.png",
+    image: "cards/primordials/rei_das_chamas.png",
     effect: "Quando destruir um Pacto inimigo, cure 1 de Vida do Herói aliado."
   },
   maeProfundezas: {
@@ -299,7 +299,7 @@ const CARD_DEFS = {
     cost: 7,
     attack: 4,
     health: 13,
-    image: "../cards/primordials/mae_das_profundezas.png",
+    image: "cards/primordials/mae_das_profundezas.png",
     effect: "No início do turno do dono, cure 1 de Vida de todos os Pactos aliados."
   }
 };
@@ -310,10 +310,10 @@ const HEROES = {
     title: "Kael Drakar, o Rei das Chamas Eternas",
     elementLabel: "Fogo",
     style: "Agressão, dano e sacrifício",
-    heroImage: "../cards/heroes/Kael.png",
+    heroImage: "cards/heroes/Kael.png",
     realm: {
       name: "Fornalha Eterna",
-      image: "../cards/realms/fornalha_eterna.png",
+      image: "cards/realms/fornalha_eterna.png",
       effect: "Pactos de Fogo aliados recebem +1 Ataque."
     },
     primordialKey: "reiChamas"
@@ -323,10 +323,10 @@ const HEROES = {
     title: "Nereia Val'Kora, A Mãe das Profundezas",
     elementLabel: "Água",
     style: "Cura, controle e resistência",
-    heroImage: "../cards/heroes/nereia.png",
+    heroImage: "cards/heroes/nereia.png",
     realm: {
       name: "Maré Profunda",
-      image: "../cards/realms/mare_profunda.png",
+      image: "cards/realms/mare_profunda.png",
       effect: "Pactos de Água aliados recebem +1 Vida máxima."
     },
     primordialKey: "maeProfundezas"

@@ -25,8 +25,8 @@
   --theme-faint: rgba(214, 90, 52, 0.1);
   --theme-border: rgba(244, 213, 134, 0.7);
   --theme-button: rgba(137, 80, 44, 0.98);
-  --arena-bg: url("../assets/backgrounds/arena_principal.png");
-  --menu-bg: url("../assets/backgrounds/menu_principal.png");
+  --arena-bg: url("assets/backgrounds/arena_principal.png");
+  --menu-bg: url("assets/backgrounds/menu_principal.png");
 }
 
 body.theme-fire {
