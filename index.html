@@ -36,7 +36,7 @@
 
       <div class="hero-choice-grid">
         <button type="button" class="hero-choice fire-choice" data-select-hero="fire">
-          <img src="cards/heroes/Kael.png" alt="Kael Drakar">
+          <img src="assets/heroes/kael.jpeg" alt="Kael Drakar">
           <span class="choice-body">
             <span class="eyebrow">Elemento Fogo</span>
             <strong>Kael Drakar, o Rei das Chamas Eternas</strong>
@@ -45,7 +45,7 @@
         </button>
 
         <button type="button" class="hero-choice water-choice" data-select-hero="water">
-          <img src="cards/heroes/nereia.png" alt="Nereia Val'Kora">
+          <img src="assets/heroes/nereia.jpeg" alt="Nereia Val'Kora">
           <span class="choice-body">
             <span class="eyebrow">Elemento Água</span>
             <strong>Nereia Val'Kora, A Mãe das Profundezas</strong>
@@ -77,7 +77,7 @@
 
       <div class="feature-panel">
         <h3>Cartas Disponíveis</h3>
-        <p>O protótipo já contém dois conjuntos jogáveis: Fogo e Água. Use Construção de Deck para consultar as listas completas enquanto a coleção visual é expandida.</p>
+        <p>O protótipo contém dois heróis jogáveis, seus Pactos fixos, Reinos, Primordiais e decks compactos de Magias, Equipamentos e Eventos.</p>
       </div>
     </section>
 
@@ -136,24 +136,19 @@
 
       <div class="rules-panel">
         <ul>
-          
-          <li>Reduza a Vida do Herói inimigo a 0.</li>
-          <li>Invoque Pactos, use Magias e controle o campo.</li>
-          <li>Ataque Pactos inimigos ou o Herói quando o campo adversário estiver vazio.</li>
-          <li>Pactos recém-invocados podem atacar Pactos, mas não podem atacar diretamente no mesmo turno.</li>
-          <li>Cada Herói começa com 20 Vida, 5 Mana máxima, 5 Mana atual e 3 cartas.</li>
-          <li>No início do turno, a Mana máxima aumenta em +1, a Mana atual enche, o jogador compra 1 carta e seus Pactos curam 1 de Vida.</li>
-          <li>O limite de mão é 7 cartas. No final do turno, cartas excedentes são descartadas automaticamente.</li>
+          <li>Cada jogador começa com 1 Herói, 3 Pactos fixos, 1 slot de Reino e 1 Pacto Primordial exclusivo bloqueado.</li>
+          <li>O Pacto do meio é o Pacto Ativo: ele pode atacar, mas não usa habilidades ativas.</li>
+          <li>Os Pactos laterais ficam no banco: não atacam, mas podem usar 1 habilidade por turno.</li>
+          <li>Uma vez por turno, você pode trocar o Pacto Ativo com um Pacto do banco.</li>
+          <li>Mana começa em 1, aumenta +1 de Mana máxima por turno, restaura no início do turno e vai até 10.</li>
+          <li>Você vence ao reduzir a Vida do Herói inimigo a 0 ou destruir os 3 Pactos inimigos.</li>
+          <li>Dê dois cliques em qualquer carta para abrir os detalhes completos no modal central.</li>
         </ul>
       </div>
     </section>
 
     <section id="battleScreen" class="screen battle-screen" aria-label="Batalha">
       <div id="turnSplash" class="turn-splash" aria-hidden="true"></div>
-      <aside id="cardDetailPanel" class="card-detail-panel" aria-label="Detalhes da Carta">
-        <p class="eyebrow">Grimório</p>
-        <div class="detail-empty">Passe o mouse sobre uma carta para abrir o grimório.</div>
-      </aside>
 
       <div class="battle-table">
         <div id="botArea" class="player-board bot-board"></div>
@@ -184,11 +179,11 @@
         <section id="rulesDrawer" class="floating-panel quick-rules" aria-label="Regras rápidas" hidden>
           <h3>Regras Rápidas</h3>
           <ul>
-            <li>Reduza a Vida do Herói inimigo a 0.</li>
-            <li>Pactos novos atacam Pactos, mas não o Herói.</li>
-            <li>Ataque direto só com o campo inimigo vazio.</li>
-            <li>Mana máxima aumenta +1 por turno.</li>
-            <li>Limite de mão: 7 cartas.</li>
+            <li>O Pacto central é o Ativo e é o único que ataca.</li>
+            <li>Pactos laterais usam habilidades, uma vez por turno cada.</li>
+            <li>Troque o Pacto Ativo uma vez por turno.</li>
+            <li>Primordial fica bloqueado até você ter 10 Mana.</li>
+            <li>Vitória: Herói inimigo a 0 Vida ou 3 Pactos destruídos.</li>
           </ul>
         </section>
       </div>
@@ -206,6 +201,13 @@
       </div>
     </section>
   </main>
+
+  <div id="cardModal" class="card-modal" hidden>
+    <div class="card-modal-dialog" role="dialog" aria-modal="true" aria-label="Detalhes da carta">
+      <button type="button" id="cardModalClose" class="modal-close" aria-label="Fechar">Fechar</button>
+      <div id="cardModalBody" class="card-modal-body"></div>
+    </div>
+  </div>
 
   <script src="script.js"></script>
 </body>

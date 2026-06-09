@@ -1,39 +1,45 @@
-const MAX_FIELD = 3;
-const MAX_HAND = 7;
+const ACTIVE_SLOT = 1;
+const MAX_PACTS = 3;
+const STARTING_HAND = 3;
+const DECK_SIZE = 15;
+const MAX_MANA = 10;
 const BOT_DELAY = 520;
+const CLICK_DELAY = 180;
+
 const ICON_ASSETS = {
   vida: "assets/icons/vida.jpeg",
   mana: "assets/icons/mana.jpeg",
-  sanidade: "assets/icons/sanidade.jpeg",
+  loucura: "assets/icons/abismo.jpeg",
   ataque: "assets/icons/ataque.jpeg",
   vida_pacto: "assets/icons/vida_pacto.jpeg",
-  fragmento_alma: "assets/icons/fragmento_alma.jpeg",
-  deck: "assets/icons/deck.jpeg",
-  abismo: "assets/icons/abismo.jpeg"
+  deck: "assets/icons/deck.jpeg"
 };
-const AUDIO_ASSETS = {
-  menu: "assets/audio/menu_theme.mp3",
-  battle: "assets/audio/battle_ambient.mp3",
-  draw: "assets/audio/draw.wav",
-  summon: "assets/audio/summon.wav",
-  attack: "assets/audio/attack.wav",
-  damage: "assets/audio/damage.wav",
-  heal: "assets/audio/heal.wav",
-  destroy: "assets/audio/destroy.wav",
-  endTurn: "assets/audio/end_turn.wav",
-  victory: "assets/audio/victory.wav",
-  defeat: "assets/audio/defeat.wav"
+
+const TYPE_LABELS = {
+  hero: "Herói",
+  pact: "Pacto",
+  primordial: "Pacto Primordial",
+  realm: "Reino",
+  spell: "Magia",
+  equipment: "Equipamento",
+  event: "Evento"
 };
-const THEME_CLASSES = [
-  "theme-fire",
-  "theme-water",
-  "theme-nature",
-  "theme-wind",
-  "theme-light",
-  "theme-dark"
-];
+
+const ELEMENT_LABELS = {
+  fire: "Fogo",
+  water: "Água",
+  neutral: "Neutro"
+};
+
+const THEME_CLASSES = ["theme-fire", "theme-water"];
+const ELEMENT_CLASSES = ["element-fire", "element-water", "element-neutral"];
 
 let nextCardId = 1;
+let clickTimer = null;
+
+function withFallbacks(primary, fallbacks = []) {
+  return [primary, ...fallbacks].filter(Boolean);
+}
 
 const CARD_DEFS = {
   cinzamor: {
@@ -41,77 +47,203 @@ const CARD_DEFS = {
     name: "Cinzamor",
     type: "pact",
     element: "fire",
-    cost: 1,
-    attack: 2,
-    health: 1,
-    image: "cards/fire/cinzamor.png",
-    effect: "Quando entra em campo, cause 1 de dano a um Pacto inimigo."
-  },
-  ignivar: {
-    key: "ignivar",
-    name: "Ignivar",
-    type: "pact",
-    element: "fire",
-    cost: 2,
-    attack: 3,
-    health: 2,
-    image: "cards/fire/ignivar.png",
-    effect: "Quando destruir outro Pacto em combate, receba 1 Mana."
-  },
-  braseon: {
-    key: "braseon",
-    name: "Braseon, A Coroa Ardente",
-    type: "pact",
-    element: "fire",
-    cost: 3,
-    attack: 4,
-    health: 4,
-    image: "cards/fire/braseon.png",
-    effect: "Enquanto estiver em campo, outros Pactos de Fogo aliados recebem +1 Ataque."
-  },
-  rubrakar: {
-    key: "rubrakar",
-    name: "Rubrakar, O Vigia das Fornalhas",
-    type: "pact",
-    element: "fire",
-    cost: 4,
-    attack: 4,
-    health: 6,
-    image: "cards/fire/rubrakar.png",
-    effect: "A primeira vez que outro Pacto de Fogo aliado seria destruído a cada turno, ele sobrevive com 1 Vida."
+    image: "assets/pacts/fire/cinzamor.jpeg",
+    imageFallbacks: ["assets/pacts/fire/cinzamor.png", "cards/fire/cinzamor.jpeg", "cards/fire/cinzamor.png"],
+    health: 12,
+    attack: 5,
+    passiveName: "Fúria Ardente",
+    passive: "Enquanto ativo recebe +1 Ataque.",
+    abilities: [
+      { name: "Mordida Incandescente", cost: { mana: 2 }, text: "Cause 3 de dano.", action: "damage3", target: "enemyAny" },
+      { name: "Explosão de Brasas", cost: { mana: 4 }, text: "Cause 2 de dano.", action: "damage2", target: "enemyAny" },
+      { name: "Fornalha Interior", cost: { madness: 2 }, text: "Recebe +3 Ataque neste turno.", action: "selfAttack3" }
+    ]
   },
   varkhan: {
     key: "varkhan",
     name: "Varkhan",
     type: "pact",
     element: "fire",
-    cost: 4,
-    attack: 6,
-    health: 4,
-    image: "cards/fire/varkhan.png",
-    effect: "Sempre que atacar, recebe +1 Ataque até o final do turno para cada outro Pacto de Fogo aliado."
+    image: "assets/pacts/fire/varkhan.jpeg",
+    imageFallbacks: ["assets/pacts/fire/varkhan.png", "cards/fire/varkhan.jpeg", "cards/fire/varkhan.png"],
+    health: 18,
+    attack: 3,
+    passiveName: "Couraça Vulcânica",
+    passive: "Recebe 1 dano a menos.",
+    abilities: [
+      { name: "Muralha de Lava", cost: { mana: 2 }, text: "Recebe +4 Vida temporária.", action: "selfTempHealth4" },
+      { name: "Terra Escaldante", cost: { mana: 5 }, text: "Cause 2 de dano a todos os Pactos inimigos.", action: "enemyPactsDamage2" },
+      { name: "Provocação Ancestral", cost: { mana: 1 }, text: "Todos os ataques devem atingir Varkhan até o próximo turno.", action: "taunt" }
+    ]
   },
-  solferro: {
-    key: "solferro",
-    name: "Solferro, A Sétima Chama",
+  ignivar: {
+    key: "ignivar",
+    name: "Ignivar",
     type: "pact",
     element: "fire",
-    cost: 5,
-    attack: 7,
-    health: 5,
-    image: "cards/fire/solferro.png",
-    effect: "Quando entrar em campo, cause 2 de dano a todos os Pactos inimigos."
+    image: "assets/pacts/fire/ignivar.jpeg",
+    imageFallbacks: ["assets/pacts/fire/ignivar.png", "cards/fire/ignivar.jpeg", "cards/fire/ignivar.png"],
+    health: 14,
+    attack: 4,
+    passiveName: "Chama Compartilhada",
+    passive: "Pacto Ativo recebe +1 Ataque.",
+    abilities: [
+      { name: "Transferência de Brasas", cost: { mana: 2 }, text: "Aliado recebe +2 Ataque.", action: "allyAttack2", target: "allyPact" },
+      { name: "Ritual das Cinzas", cost: { mana: 3 }, text: "Compre 1 carta.", action: "draw1" },
+      { name: "Sacrifício Flamejante", cost: { blood: 2 }, text: "Cause 5 de dano.", action: "damage5", target: "enemyAny" }
+    ]
   },
-  devorabrasa: {
-    key: "devorabrasa",
-    name: "A Devorabrasa",
+  thalora: {
+    key: "thalora",
+    name: "Thalora",
     type: "pact",
+    element: "water",
+    image: "assets/pacts/water/thalora.png",
+    imageFallbacks: ["assets/pacts/water/thalora.jpeg", "cards/water/thalora.png", "cards/water/thalora.jpeg"],
+    health: 11,
+    attack: 5,
+    passiveName: "Correntes Marinhas",
+    passive: "Enquanto ativo recebe +1 Ataque.",
+    abilities: [
+      { name: "Investida Abissal", cost: { mana: 2 }, text: "Cause 3 de dano.", action: "damage3", target: "enemyAny" },
+      { name: "Maremoto Repentino", cost: { mana: 4 }, text: "Cause 2 de dano a todos os Pactos inimigos.", action: "enemyPactsDamage2" },
+      { name: "Cauda Oceânica", cost: { madness: 2 }, text: "Recebe +3 Ataque neste turno.", action: "selfAttack3" }
+    ]
+  },
+  lysora: {
+    key: "lysora",
+    name: "Lysora",
+    type: "pact",
+    element: "water",
+    image: "assets/pacts/water/lysora.jpeg",
+    imageFallbacks: ["assets/pacts/water/lysora.png", "cards/water/lysora.jpeg", "cards/water/lysora.png"],
+    health: 18,
+    attack: 3,
+    passiveName: "Armadura Coralina",
+    passive: "Recebe 1 dano a menos.",
+    abilities: [
+      { name: "Muralha de Conchas", cost: { mana: 2 }, text: "Recebe +4 Vida temporária.", action: "selfTempHealth4" },
+      { name: "Recifes Cortantes", cost: { mana: 5 }, text: "Cause 2 de dano a todos os Pactos inimigos.", action: "enemyPactsDamage2" },
+      { name: "Proteção das Marés", cost: { mana: 1 }, text: "Todos os ataques devem atingir Lysora até o próximo turno.", action: "taunt" }
+    ]
+  },
+  nauren: {
+    key: "nauren",
+    name: "Nauren",
+    type: "pact",
+    element: "water",
+    image: "assets/pacts/water/nauren.jpeg",
+    imageFallbacks: ["assets/pacts/water/nauren.png", "cards/water/nauren.jpeg", "cards/water/nauren.png"],
+    health: 14,
+    attack: 4,
+    passiveName: "Canção da Maré",
+    passive: "Pacto Ativo recebe +1 Ataque.",
+    abilities: [
+      { name: "Benção Oceânica", cost: { mana: 2 }, text: "Aliado recebe +2 Ataque.", action: "allyAttack2", target: "allyPact" },
+      { name: "Voz das Profundezas", cost: { mana: 3 }, text: "Compre 1 carta.", action: "draw1" },
+      { name: "Cura das Águas Eternas", cost: { blood: 2 }, text: "Cure 5 de Vida de um aliado.", action: "heal5", target: "allyPact" }
+    ]
+  },
+  fornalhaEterna: {
+    key: "fornalhaEterna",
+    name: "Fornalha Eterna",
+    type: "realm",
     element: "fire",
-    cost: 6,
+    cost: 3,
+    image: "assets/realms/fornalha_eterna.jpeg",
+    imageFallbacks: ["assets/realms/fornalha_eterna.png", "cards/realms/fornalha_eterna.jpeg", "cards/realms/fornalha_eterna.png"],
+    permanent: [
+      "Pactos de Fogo recebem +1 Ataque.",
+      "Sempre que um Pacto de Fogo destruir um Pacto inimigo, recupere 1 Mana."
+    ],
+    enter: "Cause 1 de dano a todos os Pactos inimigos.",
+    effect: "Pactos de Fogo recebem +1 Ataque. Ao entrar, causa 1 de dano a todos os Pactos inimigos.",
+    action: "realmFornalha"
+  },
+  tronoVulcanico: {
+    key: "tronoVulcanico",
+    name: "Trono Vulcânico",
+    type: "realm",
+    element: "fire",
+    cost: 3,
+    image: "assets/realms/trono_vulcanico.jpeg",
+    imageFallbacks: ["assets/realms/trono_vulcanico.png", "cards/realms/trono_vulcanico.jpeg"],
+    permanent: [
+      "A primeira habilidade de Fogo usada a cada turno custa 1 Mana a menos.",
+      "Pactos de Fogo recebem +2 Vida."
+    ],
+    enter: "Escolha um Pacto aliado. Ele recebe +2 Ataque neste turno.",
+    effect: "Reduz a primeira habilidade de Fogo em 1 Mana e fortalece Pactos de Fogo.",
+    action: "realmTrono",
+    target: "allyPactOptional"
+  },
+  mareProfunda: {
+    key: "mareProfunda",
+    name: "Maré Profunda",
+    type: "realm",
+    element: "water",
+    cost: 3,
+    image: "assets/realms/mare_profunda.jpeg",
+    imageFallbacks: ["assets/realms/mare_profunda.png", "cards/realms/mare_profunda.jpeg", "cards/realms/mare_profunda.png"],
+    permanent: [
+      "Pactos de Água recebem +2 Vida.",
+      "Sempre que você curar um aliado, compre 1 carta. Limite de 1 vez por turno."
+    ],
+    enter: "Cure 3 de Vida de um Pacto aliado.",
+    effect: "Pactos de Água recebem +2 Vida. Ao entrar, cura um Pacto aliado.",
+    action: "realmMare",
+    target: "allyPactOptional"
+  },
+  abismoSilencioso: {
+    key: "abismoSilencioso",
+    name: "Abismo Silencioso",
+    type: "realm",
+    element: "water",
+    cost: 3,
+    image: "assets/realms/abismo_silencioso.jpeg",
+    imageFallbacks: ["assets/realms/abismo_silencioso.png", "cards/realms/abismo_silencioso.jpeg"],
+    permanent: [
+      "A primeira habilidade de Água usada a cada turno custa 1 Mana a menos.",
+      "Pactos inimigos recebem -1 Ataque."
+    ],
+    enter: "Escolha um Pacto inimigo. Ele não pode usar habilidades até o próximo turno do controlador.",
+    effect: "Reduz a primeira habilidade de Água em 1 Mana e enfraquece Pactos inimigos.",
+    action: "realmAbismo",
+    target: "enemyPactOptional"
+  },
+  reiChamas: {
+    key: "reiChamas",
+    name: "O Trono da Sétima Chama",
+    type: "primordial",
+    element: "fire",
+    cost: 10,
+    attack: 10,
+    health: 16,
+    exclusive: "Kael Drakar",
+    image: "assets/primordials/o_trono_da_setima_chama.jpeg",
+    imageFallbacks: ["assets/primordials/o_trono_da_setima_chama.png", "cards/primordials/o_trono_da_setima_chama.jpeg", "cards/primordials/rei_das_chamas.png"],
+    effect: "Ao ser invocado, cause 3 de dano a todos os Pactos inimigos.",
+    abilities: [
+      { name: "Chamas Devoradoras", text: "Sempre que destruir um Pacto inimigo, recebe +1 Ataque permanentemente." },
+      { name: "Julgamento Ardente", text: "Uma vez por turno, cause 2 de dano a qualquer alvo.", action: "primordialDamage2", target: "enemyAny" }
+    ]
+  },
+  tronoAbissal: {
+    key: "tronoAbissal",
+    name: "O Trono Abissal",
+    type: "primordial",
+    element: "water",
+    cost: 10,
     attack: 8,
-    health: 7,
-    image: "cards/fire/devorabrasa.png",
-    effect: "Quando entrar em campo, destrua um Pacto inimigo com 3 de Vida ou menos."
+    health: 20,
+    exclusive: "Nereia Val'Kora",
+    image: "assets/primordials/o_trono_abissal.jpeg",
+    imageFallbacks: ["assets/primordials/o_trono_abissal.png", "cards/primordials/o_trono_abissal.jpeg", "cards/primordials/mae_das_profundezas.png"],
+    effect: "Ao ser invocado, congele um Pacto inimigo até o próximo turno.",
+    abilities: [
+      { name: "Marés Eternas", text: "Enquanto permanecer em campo, Pactos de Água aliados recebem +2 Vida." },
+      { name: "Canção das Profundezas", text: "Uma vez por turno, cure 2 de Vida do seu Herói.", action: "primordialHealHero2" }
+    ]
   },
   chuvaBrasas: {
     key: "chuvaBrasas",
@@ -119,8 +251,11 @@ const CARD_DEFS = {
     type: "spell",
     element: "fire",
     cost: 2,
-    image: "cards/spells/fire/chuva_de_brasas.png",
-    effect: "Cause 2 de dano a um Pacto inimigo."
+    image: "assets/spells/fire/chuva_de_brasas.png",
+    imageFallbacks: ["assets/spells/fire/chuva_de_brasas.jpeg", "cards/spells/fire/chuva_de_brasas.png"],
+    effect: "Cause 2 de dano a um alvo inimigo.",
+    action: "spellDamage2",
+    target: "enemyAny"
   },
   furiaVulcanica: {
     key: "furiaVulcanica",
@@ -128,8 +263,11 @@ const CARD_DEFS = {
     type: "spell",
     element: "fire",
     cost: 3,
-    image: "cards/spells/fire/furia_vulcanica.png",
-    effect: "Um Pacto de Fogo aliado recebe +3 Ataque até o final do turno."
+    image: "assets/spells/fire/furia_vulcanica.png",
+    imageFallbacks: ["assets/spells/fire/furia_vulcanica.jpeg", "cards/spells/fire/furia_vulcanica.png"],
+    effect: "Um Pacto aliado recebe +3 Ataque neste turno.",
+    action: "spellAllyAttack3",
+    target: "allyPact"
   },
   ritualSetimaChama: {
     key: "ritualSetimaChama",
@@ -137,8 +275,10 @@ const CARD_DEFS = {
     type: "spell",
     element: "fire",
     cost: 4,
-    image: "cards/spells/fire/ritual_da_setima_chama.png",
-    effect: "Compre 2 cartas. Depois ganhe 1 de Sanidade."
+    image: "assets/spells/fire/ritual_da_setima_chama.png",
+    imageFallbacks: ["assets/spells/fire/ritual_da_setima_chama.jpeg", "cards/spells/fire/ritual_da_setima_chama.png"],
+    effect: "Compre 2 cartas e ganhe 1 Loucura.",
+    action: "draw2Madness1"
   },
   fornalhaInsaciavel: {
     key: "fornalhaInsaciavel",
@@ -146,8 +286,11 @@ const CARD_DEFS = {
     type: "spell",
     element: "fire",
     cost: 4,
-    image: "cards/spells/fire/fornalha_insaciavel.png",
-    effect: "Destrua um Pacto aliado. Receba 3 Mana."
+    image: "assets/spells/fire/fornalha_insaciavel.png",
+    imageFallbacks: ["assets/spells/fire/fornalha_insaciavel.jpeg", "cards/spells/fire/fornalha_insaciavel.png"],
+    effect: "Destrua um Pacto aliado. Receba 3 Mana.",
+    action: "destroyAllyGainMana3",
+    target: "allyPact"
   },
   apocalipseCarmesim: {
     key: "apocalipseCarmesim",
@@ -155,85 +298,10 @@ const CARD_DEFS = {
     type: "spell",
     element: "fire",
     cost: 6,
-    image: "cards/spells/fire/apocalipse_carmesim.png",
-    effect: "Cause 3 de dano a todos os Pactos inimigos."
-  },
-  thalora: {
-    key: "thalora",
-    name: "Thalora",
-    type: "pact",
-    element: "water",
-    cost: 1,
-    attack: 1,
-    health: 3,
-    image: "cards/water/thalora.png",
-    effect: "Quando entrar em campo, cure 1 de Vida de um Pacto aliado."
-  },
-  nauren: {
-    key: "nauren",
-    name: "Nauren",
-    type: "pact",
-    element: "water",
-    cost: 2,
-    attack: 2,
-    health: 3,
-    image: "cards/water/nauren.png",
-    effect: "Quando entrar em campo, compre 1 carta."
-  },
-  marem: {
-    key: "marem",
-    name: "Marem",
-    type: "pact",
-    element: "water",
-    cost: 2,
-    attack: 3,
-    health: 2,
-    image: "cards/water/marem.png",
-    effect: "Sempre que atacar, recebe +1 Vida até o início do próximo turno do dono."
-  },
-  lysora: {
-    key: "lysora",
-    name: "Lysora",
-    type: "pact",
-    element: "water",
-    cost: 3,
-    attack: 3,
-    health: 5,
-    image: "cards/water/lysora.png",
-    effect: "Enquanto estiver em campo, outros Pactos de Água aliados recebem +1 Vida."
-  },
-  nereth: {
-    key: "nereth",
-    name: "Nereth",
-    type: "pact",
-    element: "water",
-    cost: 4,
-    attack: 4,
-    health: 5,
-    image: "cards/water/nereth.png",
-    effect: "Quando entrar em campo, devolva um Pacto inimigo com custo 2 ou menos para a mão do dono."
-  },
-  velkaris: {
-    key: "velkaris",
-    name: "Velkaris",
-    type: "pact",
-    element: "water",
-    cost: 5,
-    attack: 5,
-    health: 7,
-    image: "cards/water/velkaris.png",
-    effect: "Quando entrar em campo, um Pacto inimigo recebe -2 Ataque até o final do próximo turno do oponente."
-  },
-  umbraMar: {
-    key: "umbraMar",
-    name: "Umbra-Mar",
-    type: "pact",
-    element: "water",
-    cost: 4,
-    attack: 5,
-    health: 4,
-    image: "cards/water/umbra_mar.png",
-    effect: "Sempre que causar dano a um Pacto inimigo, cure 1 de Vida do Herói aliado."
+    image: "assets/spells/fire/apocalipse_carmesim.png",
+    imageFallbacks: ["assets/spells/fire/apocalipse_carmesim.jpeg", "cards/spells/fire/apocalipse_carmesim.png"],
+    effect: "Cause 3 de dano a todos os Pactos inimigos.",
+    action: "enemyPactsDamage3"
   },
   mareRestauradora: {
     key: "mareRestauradora",
@@ -241,8 +309,11 @@ const CARD_DEFS = {
     type: "spell",
     element: "water",
     cost: 2,
-    image: "cards/spells/water/mare_restauradora.png",
-    effect: "Cure 3 de Vida de um Pacto aliado."
+    image: "assets/spells/water/mare_restauradora.png",
+    imageFallbacks: ["assets/spells/water/mare_restauradora.jpeg", "cards/spells/water/mare_restauradora.png"],
+    effect: "Cure 3 de Vida de um Pacto aliado.",
+    action: "spellHeal3",
+    target: "allyPact"
   },
   correnteRetorno: {
     key: "correnteRetorno",
@@ -250,8 +321,11 @@ const CARD_DEFS = {
     type: "spell",
     element: "water",
     cost: 3,
-    image: "cards/spells/water/corrente_de_retorno.png",
-    effect: "Devolva um Pacto inimigo para a mão do dono."
+    image: "assets/spells/water/corrente_de_retorno.png",
+    imageFallbacks: ["assets/spells/water/corrente_de_retorno.jpeg", "cards/spells/water/corrente_de_retorno.png"],
+    effect: "Congele um Pacto inimigo até o próximo turno do controlador.",
+    action: "freezeEnemy",
+    target: "enemyPact"
   },
   cancaoAbissal: {
     key: "cancaoAbissal",
@@ -259,8 +333,10 @@ const CARD_DEFS = {
     type: "spell",
     element: "water",
     cost: 3,
-    image: "cards/spells/water/cancao_abissal.png",
-    effect: "Compre 2 cartas."
+    image: "assets/spells/water/cancao_abissal.png",
+    imageFallbacks: ["assets/spells/water/cancao_abissal.jpeg", "cards/spells/water/cancao_abissal.png"],
+    effect: "Compre 2 cartas.",
+    action: "draw2"
   },
   escudoMares: {
     key: "escudoMares",
@@ -268,8 +344,11 @@ const CARD_DEFS = {
     type: "spell",
     element: "water",
     cost: 4,
-    image: "cards/spells/water/escudo_das_mares.png",
-    effect: "Um Pacto aliado recebe +3 Vida até o final do próximo turno."
+    image: "assets/spells/water/escudo_das_mares.png",
+    imageFallbacks: ["assets/spells/water/escudo_das_mares.jpeg", "cards/spells/water/escudo_das_mares.png"],
+    effect: "Um Pacto aliado recebe +3 Vida temporária.",
+    action: "spellTempHealth3",
+    target: "allyPact"
   },
   julgamentoLeviata: {
     key: "julgamentoLeviata",
@@ -277,90 +356,107 @@ const CARD_DEFS = {
     type: "spell",
     element: "water",
     cost: 6,
-    image: "cards/spells/water/julgamento_do_leviata.png",
-    effect: "Cause 4 de dano a um Pacto inimigo."
+    image: "assets/spells/water/julgamento_do_leviata.png",
+    imageFallbacks: ["assets/spells/water/julgamento_do_leviata.jpeg", "cards/spells/water/julgamento_do_leviata.png"],
+    effect: "Cause 4 de dano a um alvo inimigo.",
+    action: "spellDamage4",
+    target: "enemyAny"
   },
-  reiChamas: {
-    key: "reiChamas",
-    name: "Rei das Chamas Eternas",
-    type: "primordial",
+  coroaCinzas: {
+    key: "coroaCinzas",
+    name: "Coroa de Cinzas",
+    type: "equipment",
     element: "fire",
-    cost: 7,
-    attack: 5,
-    health: 10,
-    image: "cards/primordials/rei_das_chamas.png",
-    effect: "Quando destruir um Pacto inimigo, cure 1 de Vida do Herói aliado."
+    cost: 2,
+    effect: "Equipe um Pacto aliado. Ele recebe +1 Ataque permanentemente.",
+    action: "equipAttack1",
+    target: "allyPact"
   },
-  maeProfundezas: {
-    key: "maeProfundezas",
-    name: "A Mãe das Profundezas",
-    type: "primordial",
+  pressagioCaldeira: {
+    key: "pressagioCaldeira",
+    name: "Presságio da Caldeira",
+    type: "event",
+    element: "fire",
+    cost: 1,
+    effect: "Ganhe 1 Loucura e compre 1 carta.",
+    action: "madness1Draw1"
+  },
+  perolaAbissal: {
+    key: "perolaAbissal",
+    name: "Pérola Abissal",
+    type: "equipment",
     element: "water",
-    cost: 7,
-    attack: 4,
-    health: 13,
-    image: "cards/primordials/mae_das_profundezas.png",
-    effect: "No início do turno do dono, cure 1 de Vida de todos os Pactos aliados."
+    cost: 2,
+    effect: "Equipe um Pacto aliado. Ele recebe +1 Vida permanente e cura 2.",
+    action: "equipHealth1Heal2",
+    target: "allyPact"
+  },
+  pressagioMare: {
+    key: "pressagioMare",
+    name: "Presságio da Maré",
+    type: "event",
+    element: "water",
+    cost: 1,
+    effect: "Cure 2 de Vida do seu Herói e compre 1 carta.",
+    action: "healHero2Draw1"
   }
 };
 
 const HEROES = {
   fire: {
+    key: "kael",
     heroName: "Kael Drakar",
-    title: "Kael Drakar, o Rei das Chamas Eternas",
+    title: "Rei das Chamas Eternas",
+    element: "fire",
     elementLabel: "Fogo",
     style: "Agressão, dano e sacrifício",
-    heroImage: "cards/heroes/Kael.png",
-    realm: {
-      name: "Fornalha Eterna",
-      image: "cards/realms/fornalha_eterna.png",
-      effect: "Pactos de Fogo aliados recebem +1 Ataque."
-    },
-    primordialKey: "reiChamas"
+    maxLife: 25,
+    image: "assets/heroes/kael.jpeg",
+    imageFallbacks: ["assets/heroes/kael.png", "cards/heroes/kael.jpeg", "cards/heroes/Kael.png"],
+    passiveName: "Chama do Conquistador",
+    passive: "Sempre que um Pacto de Fogo aliado destruir um Pacto inimigo, ele recebe +1 Ataque permanentemente.",
+    pacts: ["cinzamor", "varkhan", "ignivar"],
+    primordial: "reiChamas"
   },
   water: {
+    key: "nereia",
     heroName: "Nereia Val'Kora",
-    title: "Nereia Val'Kora, A Mãe das Profundezas",
+    title: "Mãe das Profundezas",
+    element: "water",
     elementLabel: "Água",
     style: "Cura, controle e resistência",
-    heroImage: "cards/heroes/nereia.png",
-    realm: {
-      name: "Maré Profunda",
-      image: "cards/realms/mare_profunda.png",
-      effect: "Pactos de Água aliados recebem +1 Vida máxima."
-    },
-    primordialKey: "maeProfundezas"
+    maxLife: 25,
+    image: "assets/heroes/nereia.jpeg",
+    imageFallbacks: ["assets/heroes/nereia.png", "cards/heroes/nereia.jpeg", "cards/heroes/nereia.png"],
+    passiveName: "Marés Eternas",
+    passive: "A primeira vez que você curar um aliado a cada turno, cure também 1 de Vida do seu Herói.",
+    pacts: ["thalora", "lysora", "nauren"],
+    primordial: "tronoAbissal"
   }
 };
 
 const DECK_RECIPES = {
   fire: [
-    ["cinzamor", 3],
-    ["ignivar", 3],
-    ["braseon", 3],
-    ["rubrakar", 3],
-    ["varkhan", 3],
-    ["solferro", 2],
-    ["devorabrasa", 2],
-    ["chuvaBrasas", 3],
-    ["furiaVulcanica", 3],
+    ["fornalhaEterna", 2],
+    ["tronoVulcanico", 2],
+    ["chuvaBrasas", 2],
+    ["furiaVulcanica", 2],
     ["ritualSetimaChama", 2],
     ["fornalhaInsaciavel", 2],
-    ["apocalipseCarmesim", 2]
+    ["apocalipseCarmesim", 1],
+    ["coroaCinzas", 1],
+    ["pressagioCaldeira", 1]
   ],
   water: [
-    ["thalora", 3],
-    ["nauren", 3],
-    ["marem", 3],
-    ["lysora", 3],
-    ["nereth", 3],
-    ["velkaris", 2],
-    ["umbraMar", 2],
-    ["mareRestauradora", 3],
-    ["correnteRetorno", 3],
-    ["cancaoAbissal", 2],
+    ["mareProfunda", 2],
+    ["abismoSilencioso", 2],
+    ["mareRestauradora", 2],
+    ["julgamentoLeviata", 2],
     ["escudoMares", 2],
-    ["julgamentoLeviata", 2]
+    ["correnteRetorno", 2],
+    ["cancaoAbissal", 1],
+    ["perolaAbissal", 1],
+    ["pressagioMare", 1]
   ]
 };
 
@@ -378,9 +474,8 @@ const state = {
   log: [],
   battleId: 0,
   floatingPanel: null,
-  audioEnabled: false,
-  audioVolume: 0.55,
-  primordialReadyNotified: false
+  swapFlash: null,
+  activeGlow: null
 };
 
 const screens = {
@@ -399,8 +494,6 @@ const botArea = document.getElementById("botArea");
 const humanArea = document.getElementById("humanArea");
 const statusText = document.getElementById("statusText");
 const turnTitle = document.getElementById("turnTitle");
-const sideTurnTitle = document.getElementById("sideTurnTitle");
-const cardDetailPanel = document.getElementById("cardDetailPanel");
 const turnSplash = document.getElementById("turnSplash");
 const gameLog = document.getElementById("gameLog");
 const logDrawer = document.getElementById("logDrawer");
@@ -413,7 +506,9 @@ const toggleLogButton = document.getElementById("toggleLogButton");
 const toggleRulesButton = document.getElementById("toggleRulesButton");
 const soundToggleButton = document.getElementById("soundToggleButton");
 const volumeSlider = document.getElementById("volumeSlider");
-const audioCache = {};
+const modal = document.getElementById("cardModal");
+const modalBody = document.getElementById("cardModalBody");
+const modalClose = document.getElementById("cardModalClose");
 
 function createCard(cardKey) {
   const definition = typeof cardKey === "string" ? CARD_DEFS[cardKey] : cardKey;
@@ -423,18 +518,53 @@ function createCard(cardKey) {
     key: definition.key,
     name: definition.name,
     type: definition.type,
-    element: definition.element,
-    cost: definition.cost,
-    image: definition.image,
-    effect: definition.effect,
+    element: definition.element || "neutral",
+    cost: definition.cost || 0,
+    image: definition.image || "",
+    imageFallbacks: definition.imageFallbacks || [],
+    effect: definition.effect || "",
+    action: definition.action || "",
+    target: definition.target || "",
+    passiveName: definition.passiveName || "",
+    passive: definition.passive || "",
+    permanent: definition.permanent ? [...definition.permanent] : [],
+    enter: definition.enter || "",
+    exclusive: definition.exclusive || "",
+    abilities: definition.abilities ? definition.abilities.map((ability) => ({ ...ability, cost: { ...(ability.cost || {}) } })) : [],
     baseAttack: definition.attack || 0,
     baseHealth: definition.health || 0,
     currentHealth: definition.health || 0,
     ownerIndex: null,
-    summonedOnTurn: 0,
+    slot: null,
     hasAttacked: false,
-    attackModifiers: [],
-    healthModifiers: []
+    abilityUsedTurn: 0,
+    primordialAbilityUsedTurn: 0,
+    permanentAttack: 0,
+    permanentHealth: 0,
+    temporaryAttack: 0,
+    temporaryHealth: 0,
+    tauntExpiresTurn: 0,
+    frozenUntilTurn: 0,
+    abilitiesBlockedUntilTurn: 0
+  };
+}
+
+function createHeroCard(player) {
+  const hero = HEROES[player.element];
+
+  return {
+    key: hero.key,
+    name: hero.heroName,
+    type: "hero",
+    element: hero.element,
+    title: hero.title,
+    image: hero.image,
+    imageFallbacks: hero.imageFallbacks,
+    baseHealth: hero.maxLife,
+    currentHealth: player.life,
+    passiveName: hero.passiveName,
+    passive: hero.passive,
+    effect: hero.passive
   };
 }
 
@@ -474,8 +604,9 @@ function startGame() {
   state.statusMessage = "";
   state.log = [];
   state.floatingPanel = null;
-  state.primordialReadyNotified = false;
-  renderEmptyCardDetail();
+  state.swapFlash = null;
+  state.activeGlow = null;
+  closeCardModal();
   updateUI();
 }
 
@@ -504,54 +635,497 @@ function startBattle() {
   state.statusMessage = "";
   state.log = [];
   state.floatingPanel = null;
-  state.primordialReadyNotified = false;
-  renderEmptyCardDetail();
+  state.swapFlash = null;
+  state.activeGlow = null;
+  closeCardModal();
 
   state.players.forEach((player) => {
-    drawCard(player, 3, { silent: true });
-    logAction(`${player.heroName} comprou 3 cartas iniciais.`);
+    drawCard(player, STARTING_HAND, { silent: true });
+    logAction(`${player.heroName} comprou ${STARTING_HAND} cartas iniciais.`);
   });
 
-  logAction(`Você escolheu ${state.players[0].heroName}. O bot joga com ${state.players[1].heroName}.`);
-  beginTurn(state.activePlayerIndex);
+  logAction(`Você escolheu ${state.players[0].heroName}. O oponente usa ${state.players[1].heroName}.`);
+  beginTurn(0);
 }
 
 function buildPlayer(index, role, element) {
   const hero = HEROES[element];
   const deck = createDeck(element);
-  const primordial = createCard(hero.primordialKey);
-  const player = {
-    index,
-    role,
-    label: role === "human" ? "Jogador" : "Bot",
-    element,
-    elementLabel: hero.elementLabel,
-    deckStyle: hero.style,
-    heroName: hero.heroName,
-    heroImage: hero.heroImage,
-    realm: hero.realm,
-    life: 20,
-    maxLife: 20,
-    manaMax: 5,
-    mana: 5,
-    sanity: 0,
-    turnsTaken: 0,
-    deck,
-    hand: [],
-    discard: [],
-    field: Array(MAX_FIELD).fill(null),
-    primordial,
-    primordialSummoned: false,
-    primordialDestroyed: false,
-    rubrakarSaveUsed: false
-  };
+  const pacts = hero.pacts.map((pactKey, slot) => {
+    const card = createCard(pactKey);
+    card.ownerIndex = index;
+    card.slot = slot;
+    card.currentHealth = getBaseCardHealth(card);
+    return card;
+  });
+  const primordial = createCard(hero.primordial);
+  primordial.ownerIndex = index;
 
   deck.forEach((card) => {
     card.ownerIndex = index;
   });
-  primordial.ownerIndex = index;
 
-  return player;
+  return {
+    index,
+    role,
+    label: role === "human" ? "Jogador" : "Oponente",
+    element,
+    elementLabel: hero.elementLabel,
+    deckStyle: hero.style,
+    heroName: hero.heroName,
+    heroTitle: hero.title,
+    heroImage: hero.image,
+    heroImageFallbacks: hero.imageFallbacks,
+    passiveName: hero.passiveName,
+    passive: hero.passive,
+    life: hero.maxLife,
+    maxLife: hero.maxLife,
+    manaMax: 0,
+    mana: 0,
+    madness: 0,
+    turnsTaken: 0,
+    deck,
+    hand: [],
+    discard: [],
+    pacts,
+    destroyedPacts: 0,
+    realm: null,
+    primordial,
+    primordialInvoked: false,
+    primordialDestroyed: false,
+    swappedThisTurn: false,
+    healedAllyThisTurn: false,
+    realmHealDrawnThisTurn: false,
+    discountsUsed: { fire: false, water: false }
+  };
+}
+
+function updateUI() {
+  applyVisualTheme();
+
+  Object.entries(screens).forEach(([key, screen]) => {
+    if (screen) {
+      screen.classList.toggle("active", state.screen === key);
+    }
+  });
+
+  renderDeckLists();
+  renderFloatingPanels();
+
+  if (state.players.length > 0) {
+    renderBattle();
+  }
+
+  if (state.screen === "result") {
+    renderResult();
+  }
+}
+
+function applyVisualTheme() {
+  document.body.classList.remove(...THEME_CLASSES);
+  document.body.classList.add(`theme-${state.humanElement || "fire"}`);
+}
+
+function renderBattle() {
+  const human = state.players.find((player) => player.role === "human");
+  const bot = state.players.find((player) => player.role === "bot");
+  const activePlayer = state.players[state.activePlayerIndex];
+
+  if (!human || !bot) {
+    return;
+  }
+
+  botArea.innerHTML = renderPlayerBoard(bot, true);
+  humanArea.innerHTML = renderPlayerBoard(human, false);
+
+  turnTitle.textContent = activePlayer.role === "human" ? "Seu Turno" : "Turno do Oponente";
+  statusText.textContent = state.pendingTarget ? state.pendingTarget.message : (state.statusMessage || "Duelo em andamento.");
+  endTurnButton.disabled = !canHumanAct() || Boolean(state.pendingTarget);
+  endTurnButton.textContent = state.pendingTarget ? "Escolha um alvo" : "Encerrar Turno";
+}
+
+function renderPlayerBoard(player, isOpponent) {
+  const sideClass = isOpponent ? "opponent-board" : "human-board";
+  const active = player.index === state.activePlayerIndex ? "active-board" : "";
+  const hand = isOpponent ? renderOpponentHand(player) : renderHand(player);
+
+  return `
+    <section class="duel-side ${sideClass} ${active} element-${player.element}" aria-label="${escapeHtml(player.label)}">
+      <div class="player-topline">
+        <strong>${escapeHtml(player.heroName)}</strong>
+        <span>${escapeHtml(player.heroTitle)}</span>
+      </div>
+      <div class="duel-grid">
+        ${renderHeroSlot(player)}
+        <div class="pact-lane" aria-label="Pactos de ${escapeHtml(player.heroName)}">
+          ${player.pacts.map((card, slot) => renderPactSlot(player, card, slot)).join("")}
+        </div>
+        ${renderRealmSlot(player)}
+        ${renderPrimordialSlot(player)}
+      </div>
+      ${hand}
+    </section>
+  `;
+}
+
+function renderHeroSlot(player) {
+  const heroCard = createHeroCard(player);
+  const targetable = isTargetable({ type: "hero", playerIndex: player.index, player });
+  const directTarget = canHeroReceiveAttack(player);
+
+  return `
+    <button type="button" class="board-slot hero-slot ${targetable ? "targetable" : ""} ${directTarget ? "attack-target" : ""}"
+      data-hero-index="${player.index}" data-detail-type="hero" data-detail-player-index="${player.index}">
+      <div class="slot-label">Herói</div>
+      ${renderCardArt(heroCard, "hero-art")}
+      <div class="slot-card-copy">
+        <strong>${escapeHtml(player.heroName)}</strong>
+        <span>${renderIconStat("vida", `${player.life}/${player.maxLife}`, "Vida")}</span>
+        <span>${renderIconStat("mana", `${player.mana}/${player.manaMax}`, "Mana")}</span>
+        <span>${renderIconStat("loucura", player.madness, "Loucura")}</span>
+      </div>
+    </button>
+  `;
+}
+
+function renderPactSlot(player, card, slot) {
+  const isActive = slot === ACTIVE_SLOT;
+  const flash = state.swapFlash && state.swapFlash.playerIndex === player.index && state.swapFlash.slot === slot ? "swap-flash" : "";
+  const activeGlow = state.activeGlow && state.activeGlow.playerIndex === player.index && state.activeGlow.slot === slot ? "active-glow" : "";
+  const canSwap = canHumanSwap(player, slot);
+
+  if (!card) {
+    return `
+      <div class="board-slot pact-slot empty-pact ${isActive ? "active-pact-slot" : "bench-pact-slot"} ${flash} ${activeGlow}"
+        data-field-index="${player.index}" data-field-slot="${slot}">
+        <div class="slot-label">${isActive ? "Pacto Ativo" : "Banco"}</div>
+        <span class="empty-slot-text">Destruído</span>
+      </div>
+    `;
+  }
+
+  const selected = state.selectedAttackerId === card.id;
+  const targetable = isTargetable({ type: "pact", playerIndex: player.index, slot, card });
+  const canCardAttack = canAttack(card);
+  const blocked = isAbilityBlocked(card);
+  const frozen = isFrozen(card);
+  const taunt = isTaunting(card);
+
+  return `
+    <div class="board-slot pact-slot ${isActive ? "active-pact-slot" : "bench-pact-slot"} ${flash} ${activeGlow} ${targetable ? "targetable" : ""}"
+      data-field-index="${player.index}" data-field-slot="${slot}">
+      <div class="slot-label">${isActive ? "Pacto Ativo" : "Banco"}</div>
+      <button type="button" class="battle-card pact-card element-${card.element} ${canCardAttack ? "can-attack" : ""} ${selected ? "selected" : ""} ${frozen ? "frozen" : ""}"
+        data-field-index="${player.index}" data-field-slot="${slot}" data-detail-type="card" data-detail-card-id="${card.id}">
+        ${renderCardArt(card, "pact-art")}
+        <span class="card-name">${escapeHtml(card.name)}</span>
+        <span class="card-stats">
+          ${renderIconStat("ataque", getAttack(card), "Ataque")}
+          ${renderIconStat("vida_pacto", `${card.currentHealth}/${getMaxHealth(card)}`, "Vida")}
+        </span>
+        <span class="card-tags">
+          ${isActive ? "<span>Ativo</span>" : "<span>Banco</span>"}
+          ${frozen ? "<span>Congelado</span>" : ""}
+          ${blocked ? "<span>Sem habilidades</span>" : ""}
+          ${taunt ? "<span>Provocação</span>" : ""}
+        </span>
+      </button>
+      ${canSwap ? `<button type="button" class="slot-action swap-action" data-swap-slot="${slot}">Trocar</button>` : ""}
+      ${renderAbilityBar(player, card, isActive)}
+    </div>
+  `;
+}
+
+function renderAbilityBar(player, card, isActive) {
+  if (!card || player.role !== "human") {
+    return "";
+  }
+
+  const buttons = card.abilities.map((ability, index) => {
+    const usable = canUsePactAbility(player, card, ability);
+    const cost = formatCost(getDiscountedCost(player, card, ability));
+    return `
+      <button type="button" class="ability-button" data-ability-card-id="${card.id}" data-ability-index="${index}" ${usable ? "" : "disabled"}>
+        <span>${escapeHtml(ability.name)}</span>
+        <small>${escapeHtml(cost)}</small>
+      </button>
+    `;
+  }).join("");
+
+  return `
+    <div class="ability-bar ${isActive ? "active-ability-lock" : ""}">
+      ${isActive ? "<span class=\"ability-lock\">Ativo: não usa habilidades</span>" : buttons}
+    </div>
+  `;
+}
+
+function renderRealmSlot(player) {
+  const realm = player.realm;
+
+  if (!realm) {
+    return `
+      <div class="board-slot realm-slot empty-support">
+        <div class="slot-label">Reino</div>
+        <span class="empty-slot-text">Sem Reino</span>
+      </div>
+    `;
+  }
+
+  return `
+    <button type="button" class="board-slot realm-slot element-${realm.element}" data-detail-type="realm" data-detail-player-index="${player.index}">
+      <div class="slot-label">Reino</div>
+      ${renderCardArt(realm, "realm-art")}
+      <div class="slot-card-copy">
+        <strong>${escapeHtml(realm.name)}</strong>
+        <span>${escapeHtml(realm.enter || realm.effect)}</span>
+      </div>
+    </button>
+  `;
+}
+
+function renderPrimordialSlot(player) {
+  const primordial = player.primordial;
+  const stateInfo = getPrimordialState(player);
+  const canInvoke = canHumanAct() && player.index === 0 && canInvokePrimordial(player);
+  const invoked = player.primordialInvoked;
+
+  return `
+    <button type="button" class="board-slot primordial-slot element-${primordial.element} ${stateInfo.className}"
+      data-primordial-index="${player.index}" data-detail-type="primordial" data-detail-player-index="${player.index}">
+      <div class="slot-label">Primordial</div>
+      ${renderCardArt(primordial, "primordial-art")}
+      <div class="slot-card-copy">
+        <strong>${escapeHtml(primordial.name)}</strong>
+        <span class="primordial-state">${escapeHtml(stateInfo.label)}</span>
+        <span class="card-stats">
+          ${renderIconStat("mana", primordial.cost, "Mana")}
+          ${renderIconStat("ataque", primordial.baseAttack, "Ataque")}
+          ${renderIconStat("vida_pacto", invoked ? `${primordial.currentHealth}/${getMaxHealth(primordial)}` : primordial.baseHealth, "Vida")}
+        </span>
+      </div>
+      ${canInvoke ? "<span class=\"primordial-call\">Invocar</span>" : ""}
+      ${renderPrimordialAbility(player)}
+    </button>
+  `;
+}
+
+function renderPrimordialAbility(player) {
+  if (player.role !== "human" || !player.primordialInvoked) {
+    return "";
+  }
+
+  const ability = getPlayablePrimordialAbility(player.primordial);
+  if (!ability) {
+    return "";
+  }
+
+  const used = player.primordial.primordialAbilityUsedTurn === player.turnsTaken;
+  const disabled = !canHumanAct() || used || Boolean(state.pendingTarget);
+
+  return `
+    <span class="primordial-actions">
+      <span class="primordial-ability ${disabled ? "disabled" : ""}" data-primordial-ability-player-index="${player.index}">
+        ${escapeHtml(ability.name)}
+      </span>
+    </span>
+  `;
+}
+
+function renderOpponentHand(player) {
+  return `
+    <div class="opponent-hand">
+      <span>${renderIconStat("deck", player.deck.length, "Deck")}</span>
+      <span>Mão ${player.hand.length}</span>
+      <span>Descarte ${player.discard.length}</span>
+    </div>
+  `;
+}
+
+function renderHand(player) {
+  const cards = player.hand.map((card, index) => {
+    const playable = canPlayCard(player, card);
+
+    return `
+      <button type="button" class="battle-card hand-card element-${card.element} ${playable ? "playable" : ""}"
+        data-hand-index="${index}" data-detail-type="card-key" data-detail-card-key="${card.key}">
+        ${renderCardArt(card, "hand-art")}
+        <span class="card-name">${escapeHtml(card.name)}</span>
+        <span class="card-type">${escapeHtml(TYPE_LABELS[card.type])}</span>
+        <span class="card-stats">
+          ${renderIconStat("mana", card.cost, "Custo")}
+          ${card.baseAttack ? renderIconStat("ataque", card.baseAttack, "Ataque") : ""}
+          ${card.baseHealth ? renderIconStat("vida_pacto", card.baseHealth, "Vida") : ""}
+        </span>
+      </button>
+    `;
+  }).join("");
+
+  return `
+    <div class="hand-zone">
+      <div class="hand-topline">
+        <span>Sua Mão (${player.hand.length})</span>
+        <span>${renderIconStat("deck", player.deck.length, "Deck")} Descarte ${player.discard.length}</span>
+      </div>
+      <div class="hand-row">${cards || "<span class=\"empty-slot-text\">Sem cartas na mão</span>"}</div>
+    </div>
+  `;
+}
+
+function renderDeckLists() {
+  if (!deckLists) {
+    return;
+  }
+
+  deckLists.innerHTML = Object.entries(DECK_RECIPES).map(([element, recipe]) => {
+    const hero = HEROES[element];
+    const rows = recipe.map(([cardKey, copies]) => {
+      const card = CARD_DEFS[cardKey];
+      return `
+        <button type="button" class="deck-row" data-detail-type="card-key" data-detail-card-key="${card.key}">
+          ${renderCardArt(card, "deck-row-art")}
+          <span>
+            <strong>${escapeHtml(card.name)}</strong>
+            <span>${escapeHtml(TYPE_LABELS[card.type])} · ${escapeHtml(ELEMENT_LABELS[card.element])} · ${renderPlainCost(card.cost)}</span>
+          </span>
+          <strong class="copy-count">x${copies}</strong>
+        </button>
+      `;
+    }).join("");
+
+    return `
+      <article class="deck-column element-${element}">
+        <h3>${escapeHtml(hero.heroName)}</h3>
+        <p>${DECK_SIZE} cartas · sem Heróis, Pactos ou Primordiais · até 2 cópias.</p>
+        <div class="deck-list">${rows}</div>
+      </article>
+    `;
+  }).join("");
+}
+
+function renderCardArt(card, className = "") {
+  const candidates = withFallbacks(card.image, card.imageFallbacks);
+
+  if (candidates.length === 0) {
+    return `<span class="card-art ${className} generated-art element-${card.element}">${escapeHtml(card.name)}</span>`;
+  }
+
+  const [src, ...fallbacks] = candidates;
+  return `
+    <span class="card-art ${className}">
+      <img src="${escapeHtml(src)}" data-fallbacks="${escapeHtml(fallbacks.join("|"))}" alt="${escapeHtml(card.name)}" onerror="fallbackImage(this)">
+    </span>
+  `;
+}
+
+function renderIconStat(icon, value, label) {
+  const src = ICON_ASSETS[icon];
+  return `
+    <span class="icon-stat" title="${escapeHtml(label)}">
+      ${src ? `<img src="${escapeHtml(src)}" alt="">` : ""}
+      <strong>${escapeHtml(value)}</strong>
+    </span>
+  `;
+}
+
+function renderPlainCost(cost) {
+  return cost ? `${cost} Mana` : "0 Mana";
+}
+
+function fallbackImage(image) {
+  const fallbacks = image.dataset.fallbacks ? image.dataset.fallbacks.split("|").filter(Boolean) : [];
+
+  if (fallbacks.length === 0) {
+    const art = image.closest(".card-art");
+    if (art) {
+      art.classList.add("missing-art");
+      art.textContent = image.alt || "Arte";
+    }
+    image.remove();
+    return;
+  }
+
+  const [next, ...rest] = fallbacks;
+  image.dataset.fallbacks = rest.join("|");
+  image.src = next;
+}
+
+window.fallbackImage = fallbackImage;
+
+function beginTurn(playerIndex) {
+  if (state.gameOver) {
+    return;
+  }
+
+  const player = state.players[playerIndex];
+  state.activePlayerIndex = playerIndex;
+  state.selectedAttackerId = null;
+  state.pendingTarget = null;
+  player.turnsTaken += 1;
+  player.manaMax = Math.min(MAX_MANA, player.manaMax + 1);
+  player.mana = player.manaMax;
+  player.swappedThisTurn = false;
+  player.healedAllyThisTurn = false;
+  player.realmHealDrawnThisTurn = false;
+  player.discountsUsed = { fire: false, water: false };
+  expireStartOfTurnEffects(player);
+
+  player.pacts.forEach((card) => {
+    if (!card) {
+      return;
+    }
+    card.hasAttacked = false;
+    card.abilityUsedTurn = 0;
+  });
+
+  if (player.primordialInvoked) {
+    player.primordial.primordialAbilityUsedTurn = 0;
+  }
+
+  if (player.turnsTaken > 1) {
+    drawCard(player, 1);
+  }
+  logAction(`Começou o turno de ${player.heroName}. Mana ${player.mana}/${player.manaMax}.`);
+  state.statusMessage = player.role === "human" ? `Seu turno com ${player.heroName}.` : "O oponente está pensando...";
+  updateUI();
+  flashTurnSplash(player.role === "human" ? "Seu Turno" : "Turno do Oponente");
+
+  if (player.role === "bot") {
+    const battleId = state.battleId;
+    window.setTimeout(() => botTurn(battleId), BOT_DELAY);
+  }
+}
+
+function expireStartOfTurnEffects(player) {
+  player.pacts.forEach((card) => {
+    if (!card) {
+      return;
+    }
+    card.temporaryAttack = 0;
+    if (card.temporaryHealth > 0) {
+      card.currentHealth = Math.max(1, card.currentHealth - Math.min(card.temporaryHealth, card.currentHealth - 1));
+      card.temporaryHealth = 0;
+    }
+    if (card.tauntExpiresTurn && card.tauntExpiresTurn <= player.turnsTaken) {
+      card.tauntExpiresTurn = 0;
+    }
+  });
+  clampPacts(player);
+}
+
+function expireEndOfTurnEffects(player) {
+  player.pacts.forEach((card) => {
+    if (!card) {
+      return;
+    }
+    card.temporaryAttack = 0;
+    if (card.frozenUntilTurn && card.frozenUntilTurn <= player.turnsTaken) {
+      card.frozenUntilTurn = 0;
+    }
+    if (card.abilitiesBlockedUntilTurn && card.abilitiesBlockedUntilTurn <= player.turnsTaken) {
+      card.abilitiesBlockedUntilTurn = 0;
+    }
+  });
+  clampPacts(player);
 }
 
 function drawCard(player, amount = 1, options = {}) {
@@ -572,2071 +1146,463 @@ function drawCard(player, amount = 1, options = {}) {
   }
 
   if (drawn > 0 && !options.silent) {
-    const plural = drawn === 1 ? "carta" : "cartas";
-    logAction(`${player.heroName} comprou ${drawn} ${plural}.`);
-    showBattleFeedback("draw", `+${drawn} ${plural}`);
-    playSfx("draw");
+    logAction(`${player.heroName} comprou ${drawn} ${drawn === 1 ? "carta" : "cartas"}.`);
   }
 
   return drawn;
 }
 
-function beginTurn(playerIndex) {
-  if (state.gameOver) {
-    return;
-  }
-
-  const player = state.players[playerIndex];
-  state.activePlayerIndex = playerIndex;
-  state.selectedAttackerId = null;
-  state.pendingTarget = null;
-  state.players.forEach((currentPlayer) => {
-    currentPlayer.rubrakarSaveUsed = false;
-  });
-
-  player.turnsTaken += 1;
-  expireEffectsFor(player.index, player.turnsTaken, "start");
-  player.manaMax += 1;
-  player.mana = player.manaMax;
-
-  player.field.forEach((card) => {
-    if (!card) {
-      return;
-    }
-
-    card.hasAttacked = false;
-    healPact(card, 1, { silent: true });
-  });
-
-  if (hasPact(player, "maeProfundezas")) {
-    player.field.forEach((card) => {
-      if (card) {
-        healPact(card, 1, { silent: true });
-      }
-    });
-    logAction("A Mãe das Profundezas curou 1 de Vida de todos os Pactos aliados.");
-  }
-
-  drawCard(player, 1);
-  logAction(`Começou o turno de ${player.heroName}.`);
-  state.statusMessage = player.role === "bot" ? "O bot está pensando..." : `Seu turno com ${player.heroName}.`;
-  updateUI();
-  flashTurnSplash(player.role === "bot" ? "Turno do Oponente" : "Seu Turno");
-
-  if (player.role === "bot") {
-    const battleId = state.battleId;
-    window.setTimeout(() => botTurn(battleId), BOT_DELAY);
-  }
-}
-
-function updateUI() {
-  applyVisualTheme();
-  updateAudioControls();
-
-  Object.entries(screens).forEach(([key, screen]) => {
-    screen.classList.toggle("active", state.screen === key);
-  });
-
-  renderDeckLists();
-
-  if (state.players.length > 0) {
-    renderBattle();
-  }
-
-  if (state.screen === "result") {
-    renderResult();
-  }
-}
-
-function applyVisualTheme() {
-  document.body.classList.remove(...THEME_CLASSES);
-
-  const theme = state.humanElement || "fire";
-
-  if (THEME_CLASSES.includes(`theme-${theme}`)) {
-    document.body.classList.add(`theme-${theme}`);
-  }
-}
-
-function renderBattle() {
-  const human = state.players.find((player) => player.role === "human");
-  const bot = state.players.find((player) => player.role === "bot");
-
-  botArea.classList.toggle("active", bot.index === state.activePlayerIndex);
-  humanArea.classList.toggle("active", human.index === state.activePlayerIndex);
-  botArea.innerHTML = renderPlayerBoard(bot, true);
-  humanArea.innerHTML = renderPlayerBoard(human, false);
-
-  const activePlayer = state.players[state.activePlayerIndex];
-  turnTitle.textContent = activePlayer.role === "bot" ? "Turno do Oponente" : "Seu Turno";
-  if (sideTurnTitle) {
-    sideTurnTitle.textContent = activePlayer.role === "bot" ? "Turno do Oponente" : "Seu Turno";
-  }
-  statusText.textContent = state.pendingTarget
-    ? state.pendingTarget.message
-    : `${activePlayer.heroName} - ${state.statusMessage}`;
-  endTurnButton.disabled = state.gameOver || state.botThinking || activePlayer.role !== "human";
-  renderFloatingPanels();
-  renderLog();
-  notifyPrimordialReady();
-}
-
-function renderFloatingPanels() {
-  const logOpen = state.floatingPanel === "log";
-  const rulesOpen = state.floatingPanel === "rules";
-
-  if (logDrawer) {
-    logDrawer.hidden = !logOpen;
-    logDrawer.classList.toggle("is-open", logOpen);
-    if (logOpen) {
-      logDrawer.classList.remove("is-closing");
-    }
-  }
-
-  if (rulesDrawer) {
-    rulesDrawer.hidden = !rulesOpen;
-    rulesDrawer.classList.toggle("is-open", rulesOpen);
-    if (rulesOpen) {
-      rulesDrawer.classList.remove("is-closing");
-    }
-  }
-
-  if (toggleLogButton) {
-    toggleLogButton.classList.toggle("active-toggle", logOpen);
-    toggleLogButton.setAttribute("aria-expanded", String(logOpen));
-  }
-
-  if (toggleRulesButton) {
-    toggleRulesButton.classList.toggle("active-toggle", rulesOpen);
-    toggleRulesButton.setAttribute("aria-expanded", String(rulesOpen));
-  }
-}
-
-function notifyPrimordialReady() {
-  const human = state.players.find((player) => player.role === "human");
-  const ready = Boolean(human && canInvokePrimordial(human));
-
-  if (ready && !state.primordialReadyNotified) {
-    state.primordialReadyNotified = true;
-    showBattleFeedback("primordial-ready", "Primordial disponível");
-    playSfx("summon");
-  }
-
-  if (!ready) {
-    state.primordialReadyNotified = false;
-  }
-}
-
-function renderPlayerBoard(player, isBotBoard) {
-  const sanity = getSanityState(player.sanity);
-  const active = player.index === state.activePlayerIndex;
-  const hand = isBotBoard ? renderBotHand(player) : renderHumanHand(player);
-  const field = player.field.map((card, slot) => renderFieldSlot(player, card, slot)).join("");
-  const primordialState = getPrimordialState(player);
-  const directTarget = canHeroBeDirectTarget(player);
-
-  return `
-    <div class="player-layout element-${player.element} ${active ? "active-layout" : ""}">
-      <button type="button" class="hero-panel element-${player.element} ${directTarget ? "direct-target" : ""}" data-hero-index="${player.index}" data-detail-type="hero" data-detail-player-index="${player.index}">
-        <div class="portrait-frame">
-          <img src="${escapeHtml(player.heroImage)}" alt="${escapeHtml(player.heroName)}">
-        </div>
-        <div class="hero-body">
-          <p class="eyebrow">${escapeHtml(player.label)} / ${escapeHtml(player.elementLabel)}</p>
-          <h3>${escapeHtml(player.heroName)}</h3>
-          <div class="stat-grid">
-            <div class="stat">
-              ${renderInlineStat("vida", `${player.life}/${player.maxLife}`, "Vida")}
-            </div>
-            <div class="stat">
-              ${renderInlineStat("mana", `${player.mana}/${player.manaMax}`, "Mana")}
-            </div>
-            <div class="stat ${sanity.className}">
-              ${renderInlineStat("sanidade", player.sanity, "Sanidade")}
-            </div>
-            <div class="stat ${sanity.className}">
-              <span class="stat-label">Estado</span>
-              <strong>${sanity.label}</strong>
-            </div>
-          </div>
-        </div>
-      </button>
-
-      <div class="board-zone">
-        <div class="field-zone">
-          <p class="zone-label">${isBotBoard ? "Campo do Oponente" : "Seu Campo"}</p>
-          <div class="field-grid">${field}</div>
-        </div>
-        <div class="hand-zone ${isBotBoard ? "bot-hand-zone" : "human-hand-zone"}">
-          <p class="zone-label">${isBotBoard ? `Mão do Bot (${player.hand.length})` : `Sua Mão (${player.hand.length}/${MAX_HAND})`}</p>
-          <div class="hand-row">${hand}</div>
-        </div>
-      </div>
-
-      <div class="side-panel">
-        <article class="asset-card realm-card element-${player.element}" data-detail-type="realm" data-detail-player-index="${player.index}">
-          <div class="support-image">
-            <img src="${escapeHtml(player.realm.image)}" alt="${escapeHtml(player.realm.name)}">
-          </div>
-          <div class="asset-body">
-            <p class="card-type">Reino Ativo</p>
-            <h3>${escapeHtml(player.realm.name)}</h3>
-            <p>${escapeHtml(player.realm.effect)}</p>
-          </div>
-        </article>
-
-        <button type="button" class="primordial-button element-${player.element} ${primordialState.className}" data-primordial-index="${player.index}" data-detail-type="primordial" data-detail-player-index="${player.index}">
-          <div class="support-image">
-            <img src="${escapeHtml(player.primordial.image)}" alt="${escapeHtml(player.primordial.name)}">
-          </div>
-          <div class="primordial-body">
-            <p class="card-type">Pacto Primordial</p>
-            <h3>${escapeHtml(player.primordial.name)}</h3>
-            <div class="primordial-stats">
-              <span class="primordial-status">${escapeHtml(primordialState.label)}</span>
-              ${renderInlineStat("mana", player.primordial.cost, "Mana")}
-              ${renderInlineStat("ataque", player.primordial.baseAttack, "Ataque")}
-              ${renderInlineStat("vida_pacto", player.primordial.baseHealth, "Vida do Pacto")}
-            </div>
-            <p>${escapeHtml(player.primordial.effect)}</p>
-          </div>
-        </button>
-
-        <div class="pile-row">
-          <article class="pile-card deck-pile" aria-label="Deck: ${player.deck.length}" data-detail-type="deck" data-detail-player-index="${player.index}">
-            <span class="pile-icon">${renderIcon("deck", "Deck")}</span>
-            <span class="pile-label">Deck</span>
-            <strong>${player.deck.length}</strong>
-          </article>
-          <article class="pile-card abyss-pile" aria-label="Abismo: ${player.discard.length}" data-detail-type="abismo" data-detail-player-index="${player.index}">
-            <span class="pile-icon">${renderIcon("abismo", "Abismo")}</span>
-            <span class="pile-label">Abismo</span>
-            <strong>${player.discard.length}</strong>
-          </article>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function renderHumanHand(player) {
-  if (player.hand.length === 0) {
-    return "<span class=\"empty-slot\">Sem cartas</span>";
-  }
-
-  return player.hand.map((card, index) => {
-    const playable = canPlayCard(player, card);
-
-    return `
-      <button type="button" class="card image-card hand-card element-${card.element} ${playable ? "playable" : ""}" data-hand-index="${index}" data-detail-type="card" data-detail-card-id="${card.id}" title="${escapeHtml(card.name)}">
-        <img class="full-card-image" src="${escapeHtml(card.image)}" alt="${escapeHtml(card.name)}">
-      </button>
-    `;
-  }).join("");
-}
-
-function renderBotHand(player) {
-  if (player.hand.length === 0) {
-    return "<span class=\"empty-slot\">Sem cartas</span>";
-  }
-
-  return player.hand.map(() => "<div class=\"card-back\" aria-label=\"Carta do Bot\"><span></span></div>").join("");
-}
-
-function renderFieldSlot(player, card, slot) {
-  if (!card) {
-    const canReceiveSummon = canHumanAct() && player.index === 0 && player.field.some((fieldSlot) => fieldSlot === null);
-
-    return `
-      <div class="field-slot ${canReceiveSummon ? "summon-ready-slot" : ""}" data-field-index="${player.index}" data-field-slot="${slot}">
-        <span class="empty-slot">Espaço vazio</span>
-      </div>
-    `;
-  }
-
-  const selected = state.selectedAttackerId === card.id;
-  const targetable = isTargetable(card);
-  const canCardAttack = canAttack(card);
-
-  return `
-    <div class="field-slot" data-field-index="${player.index}" data-field-slot="${slot}">
-      <button type="button" class="card image-card field-card element-${card.element} ${canCardAttack ? "can-attack" : ""} ${selected ? "selected" : ""} ${targetable ? "targetable" : ""}" data-field-index="${player.index}" data-field-slot="${slot}" data-detail-type="card" data-detail-card-id="${card.id}" title="${escapeHtml(card.name)}">
-        <img class="full-card-image" src="${escapeHtml(card.image)}" alt="${escapeHtml(card.name)}">
-        <span class="field-card-state">
-          ${renderInlineStat("ataque", getAttack(card), "Ataque")}
-          ${renderInlineStat("vida_pacto", `${card.currentHealth}/${getMaxHealth(card)}`, "Vida do Pacto")}
-        </span>
-      </button>
-    </div>
-  `;
-}
-
-function renderCardStats(card) {
-  if (card.type === "spell") {
-    return "";
-  }
-
-  return `
-    <div class="card-stats">
-      ${renderInlineStat("ataque", card.baseAttack, "Ataque")}
-      ${renderInlineStat("vida_pacto", card.baseHealth, "Vida do Pacto")}
-    </div>
-  `;
-}
-
-function renderDeckLists() {
-  if (!deckLists || deckLists.dataset.ready === "true") {
-    return;
-  }
-
-  deckLists.innerHTML = ["fire", "water"].map((element) => {
-    const hero = HEROES[element];
-    const rows = DECK_RECIPES[element].map(([cardKey, copies]) => {
-      const card = CARD_DEFS[cardKey];
-      const stats = card.type === "spell"
-        ? "<span class=\"deck-card-type\">Magia</span>"
-        : `${renderInlineStat("ataque", card.attack, "Ataque")} ${renderInlineStat("vida_pacto", card.health, "Vida do Pacto")}`;
-
-      return `
-        <div class="deck-row">
-          <img src="${escapeHtml(card.image)}" alt="${escapeHtml(card.name)}">
-          <span>
-            <strong>${escapeHtml(card.name)}</strong>
-            <span class="deck-card-stats">
-              ${renderInlineStat("mana", card.cost, "Mana")}
-              ${stats}
-            </span>
-          </span>
-          <strong class="copy-count">${copies}x</strong>
-        </div>
-      `;
-    }).join("");
-
-    return `
-      <article class="deck-column element-${element}">
-        <p class="eyebrow">${escapeHtml(hero.elementLabel)}</p>
-        <h3>${escapeHtml(hero.heroName)}</h3>
-        <div class="deck-list">${rows}</div>
-      </article>
-    `;
-  }).join("");
-  deckLists.dataset.ready = "true";
-}
-
-function renderLog() {
-  gameLog.innerHTML = state.log
-    .slice(-50)
-    .reverse()
-    .map((entry) => `<p class="log-entry">${escapeHtml(entry)}</p>`)
-    .join("");
-}
-
-function renderIcon(iconKey, label) {
-  const iconLabel = label || getIconLabel(iconKey);
-  const iconPath = ICON_ASSETS[iconKey];
-
-  if (!iconPath) {
-    return `
-      <span class="resource-icon resource-icon-${escapeHtml(iconKey)} icon-missing" aria-label="${escapeHtml(iconLabel)}"></span>
-    `;
-  }
-
-  return `
-    <span class="resource-icon resource-icon-${escapeHtml(iconKey)}" aria-label="${escapeHtml(iconLabel)}">
-      <img src="${escapeHtml(iconPath)}" alt="" onerror="this.parentElement.classList.add('icon-missing'); this.removeAttribute('src');">
-    </span>
-  `;
-}
-
-function renderInlineStat(iconKey, value, label, className = "") {
-  return `
-    <span class="icon-stat ${escapeHtml(className)}">
-      ${renderIcon(iconKey, label)}
-      <strong>${escapeHtml(value)}</strong>
-    </span>
-  `;
-}
-
-function renderDetailStat(item) {
-  if (typeof item === "string") {
-    return `<span>${escapeHtml(item)}</span>`;
-  }
-
-  return `
-    <span class="detail-icon-stat">
-      ${renderIcon(item.icon, item.label)}
-      <strong>${escapeHtml(item.value)}</strong>
-    </span>
-  `;
-}
-
-function getIconLabel(iconKey) {
-  const labels = {
-    vida: "Vida",
-    mana: "Mana",
-    sanidade: "Sanidade",
-    ataque: "Ataque",
-    vida_pacto: "Vida do Pacto",
-    fragmento_alma: "Fragmento de Alma",
-    deck: "Deck",
-    abismo: "Abismo"
-  };
-
-  return labels[iconKey] || iconKey;
-}
-
-function getAudio(name) {
-  if (!AUDIO_ASSETS[name]) {
-    return null;
-  }
-
-  if (!audioCache[name]) {
-    const audio = new Audio(AUDIO_ASSETS[name]);
-    audio.preload = "auto";
-    audio.volume = state.audioVolume;
-    audioCache[name] = audio;
-  }
-
-  return audioCache[name];
-}
-
-function playSfx(name) {
-  if (!state.audioEnabled) {
-    return;
-  }
-
-  const audio = getAudio(name);
-
-  if (!audio) {
-    return;
-  }
-
-  audio.volume = state.audioVolume;
-  audio.currentTime = 0;
-  audio.play().catch(() => {});
-}
-
-function updateAudioControls() {
-  if (soundToggleButton) {
-    soundToggleButton.textContent = state.audioEnabled ? "Som: ligado" : "Som: desligado";
-    soundToggleButton.setAttribute("aria-pressed", String(state.audioEnabled));
-    soundToggleButton.classList.toggle("active-toggle", state.audioEnabled);
-  }
-
-  if (volumeSlider) {
-    volumeSlider.value = Math.round(state.audioVolume * 100);
-  }
-
-  Object.values(audioCache).forEach((audio) => {
-    audio.volume = state.audioVolume;
-  });
-}
-
-function toggleAudio() {
-  state.audioEnabled = !state.audioEnabled;
-  updateAudioControls();
-  playSfx("endTurn");
-}
-
-function setAudioVolume(value) {
-  const parsed = Number(value);
-  state.audioVolume = Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed / 100)) : state.audioVolume;
-  updateAudioControls();
-}
-
-function flashTurnSplash(text) {
-  if (!turnSplash || state.screen !== "battle") {
-    return;
-  }
-
-  turnSplash.textContent = text;
-  turnSplash.classList.add("effect-turn-banner");
-  turnSplash.classList.remove("show");
-  window.requestAnimationFrame(() => {
-    turnSplash.classList.add("show");
-  });
-  window.setTimeout(() => {
-    turnSplash.classList.remove("show");
-    turnSplash.classList.remove("effect-turn-banner");
-  }, 1450);
-}
-
-function showBattleFeedback(type, text) {
-  const battleScreen = screens.battle;
-
-  if (!battleScreen) {
-    return;
-  }
-
-  const feedback = document.createElement("div");
-  feedback.className = `battle-feedback effect-${type}`;
-  feedback.textContent = text;
-  battleScreen.appendChild(feedback);
-
-  window.setTimeout(() => {
-    feedback.remove();
-  }, 900);
-}
-
-function renderResult() {
-  const humanWon = state.winnerIndex === 0;
-  resultTitle.textContent = humanWon ? "Vitória" : "Derrota";
-  resultText.textContent = humanWon
-    ? "Você reduziu a Vida do Herói inimigo a 0."
-    : "O bot venceu esta partida.";
-}
-
-function renderEmptyCardDetail() {
-  if (!cardDetailPanel) {
-    return;
-  }
-
-  cardDetailPanel.innerHTML = `
-    <p class="eyebrow">Grimório</p>
-    <div class="detail-empty">
-      <strong>Arquivo selado</strong>
-      <span>Passe o mouse sobre uma carta, Reino, Herói ou Primordial para abrir os registros.</span>
-    </div>
-  `;
-}
-
-function renderCardDetail(detail) {
-  if (!cardDetailPanel || !detail) {
-    renderEmptyCardDetail();
-    return;
-  }
-
-  const stats = detail.stats
-    ? `<div class="detail-statline">${detail.stats.map((item) => renderDetailStat(item)).join("")}</div>`
-    : "";
-  const lore = detail.lore ? `<p class="detail-lore">${escapeHtml(detail.lore)}</p>` : "";
-
-  cardDetailPanel.innerHTML = `
-    <p class="eyebrow">Grimório</p>
-    <div class="detail-image-wrap ${detail.horizontal ? "detail-image-horizontal" : ""}">
-      <img class="${detail.fullCard ? "full-card-image" : ""}" src="${escapeHtml(detail.image)}" alt="${escapeHtml(detail.name)}">
-    </div>
-    <div class="detail-body">
-      <h3>${escapeHtml(detail.name)}</h3>
-      <p class="detail-subtitle">${escapeHtml(detail.type)}${detail.element ? ` | ${escapeHtml(detail.element)}` : ""}</p>
-      ${stats}
-      <p>${escapeHtml(detail.effect || "")}</p>
-      ${lore}
-    </div>
-  `;
-}
-
-function handleDetailHover(event) {
-  const element = event.target.closest("[data-detail-type]");
-
-  if (!element || !document.getElementById("battleScreen").contains(element)) {
-    return;
-  }
-
-  const detail = getDetailForElement(element);
-
-  if (detail) {
-    renderCardDetail(detail);
-  }
-}
-
-function getDetailForElement(element) {
-  const type = element.dataset.detailType;
-
-  if (type === "card") {
-    const location = getVisibleCardById(element.dataset.detailCardId);
-
-    if (!location) {
-      return null;
-    }
-
-    const card = location.card;
-    const isField = location.zone === "field";
-    const stats = [
-      `Raridade ${getRarityLabel(card)}`,
-      { icon: "mana", value: card.cost, label: "Mana" }
-    ];
-
-    if (card.type !== "spell") {
-      stats.push({ icon: "ataque", value: isField ? getAttack(card) : card.baseAttack, label: "Ataque" });
-      stats.push({
-        icon: "vida_pacto",
-        value: isField ? `${card.currentHealth}/${getMaxHealth(card)}` : card.baseHealth,
-        label: "Vida do Pacto"
-      });
-    }
-
-    return {
-      image: card.image,
-      name: card.name,
-      type: getTypeLabel(card.type),
-      element: getElementLabel(card.element),
-      stats,
-      effect: card.effect,
-      lore: card.lore || getDefaultLore(card),
-      fullCard: true
-    };
-  }
-
-  const player = state.players[Number(element.dataset.detailPlayerIndex)];
-
-  if (!player) {
-    return null;
-  }
-
-  if (type === "hero") {
-    const sanity = getSanityState(player.sanity);
-
-    return {
-      image: player.heroImage,
-      name: player.heroName,
-      type: "Herói",
-      element: player.elementLabel,
-      stats: [
-        `Raridade Heróica`,
-        { icon: "vida", value: `${player.life}/${player.maxLife}`, label: "Vida" },
-        { icon: "mana", value: `${player.mana}/${player.manaMax}`, label: "Mana" },
-        { icon: "sanidade", value: player.sanity, label: "Sanidade" },
-        sanity.label
-      ],
-      effect: player.deckStyle,
-      lore: player.element === "fire"
-        ? "Kael governa pela chama: cada vitória custa cinzas, juramentos e sangue antigo."
-        : "Nereia conduz as marés profundas, curando aliados enquanto arrasta inimigos para o silêncio."
-    };
-  }
-
-  if (type === "realm") {
-    return {
-      image: player.realm.image,
-      name: player.realm.name,
-      type: "Reino Ativo",
-      element: player.elementLabel,
-      stats: [`Raridade Única`, `Elemento ${player.elementLabel}`],
-      effect: player.realm.effect,
-      lore: "Um domínio vivo. Enquanto estiver ativo, o campo inteiro respira a vontade do seu Herói.",
-      horizontal: true
-    };
-  }
-
-  if (type === "deck") {
-    return {
-      image: ICON_ASSETS.deck,
-      name: "Deck",
-      type: "Pilha de compra",
-      element: player.elementLabel,
-      stats: [
-        { icon: "deck", value: player.deck.length, label: "Deck" },
-        `Cartas na mão ${player.hand.length}/${MAX_HAND}`
-      ],
-      effect: "Cartas restantes para compra. A cada turno, o jogador ativo compra 1 carta.",
-      lore: "O grimório fechado guarda pactos ainda não revelados.",
-      fullCard: false
-    };
-  }
-
-  if (type === "abismo") {
-    return {
-      image: ICON_ASSETS.abismo,
-      name: "Abismo",
-      type: "Descarte",
-      element: player.elementLabel,
-      stats: [
-        { icon: "abismo", value: player.discard.length, label: "Abismo" }
-      ],
-      effect: "Cartas usadas, destruídas ou descartadas repousam aqui.",
-      lore: "Tudo que cai no Abismo deixa uma sombra no campo de batalha.",
-      fullCard: false
-    };
-  }
-
-  if (type === "primordial") {
-    const primordial = player.primordial;
-    const status = getPrimordialState(player).label;
-
-    return {
-      image: primordial.image,
-      name: primordial.name,
-      type: "Pacto Primordial",
-      element: getElementLabel(primordial.element),
-      stats: [
-        `Raridade Lendária`,
-        `${status}`,
-        { icon: "mana", value: primordial.cost, label: "Mana" },
-        { icon: "ataque", value: primordial.baseAttack, label: "Ataque" },
-        { icon: "vida_pacto", value: primordial.baseHealth, label: "Vida do Pacto" }
-      ],
-      effect: primordial.effect,
-      lore: primordial.lore || getDefaultLore(primordial),
-      fullCard: false
-    };
-  }
-
-  return null;
-}
-
-function getRarityLabel(card) {
-  if (card.type === "primordial") {
-    return "Lendária";
-  }
-
-  if (card.type === "spell") {
-    if (card.cost >= 6) {
-      return "Épica";
-    }
-
-    if (card.cost >= 4) {
-      return "Rara";
-    }
-
-    return "Comum";
-  }
-
-  if (card.cost >= 6) {
-    return "Épica";
-  }
-
-  if (card.cost >= 4) {
-    return "Rara";
-  }
-
-  if (card.cost >= 2) {
-    return "Incomum";
-  }
-
-  return "Comum";
-}
-
-function getDefaultLore(card) {
-  if (card.type === "primordial") {
-    return card.element === "fire"
-      ? "Quando sua coroa desperta, antigas fornalhas respondem como tambores de guerra."
-      : "Nas profundezas, sua voz é uma maré que transforma medo em devoção.";
-  }
-
-  if (card.type === "spell") {
-    return card.element === "fire"
-      ? "Um encantamento preservado em brasas, escrito para terminar batalhas antes que a fumaça assente."
-      : "Uma maré de magia antiga, paciente como o abismo e precisa como lâmina ritual.";
-  }
-
-  return card.element === "fire"
-    ? "Forjado entre juramentos ardentes, este Pacto prefere glória curta a silêncio eterno."
-    : "Nascido sob águas negras, este Pacto vence pela resistência, pelo frio e pela espera.";
-}
-
-function getVisibleCardById(cardId) {
-  for (const player of state.players) {
-    const handCard = player.role === "human" ? player.hand.find((card) => card.id === cardId) : null;
-
-    if (handCard) {
-      return { card: handCard, player, zone: "hand" };
-    }
-
-    const fieldCard = player.field.find((card) => card && card.id === cardId);
-
-    if (fieldCard) {
-      return { card: fieldCard, player, zone: "field" };
-    }
-  }
-
-  return null;
-}
-
-function getTypeLabel(type) {
-  const labels = {
-    pact: "Pacto",
-    primordial: "Pacto Primordial",
-    spell: "Magia"
-  };
-
-  return labels[type] || type;
-}
-
-function getElementLabel(element) {
-  const labels = {
-    fire: "Fogo",
-    water: "Água"
-  };
-
-  return labels[element] || element || "";
-}
-
 function playCard(handIndex) {
-  const player = state.players[0];
-
   if (!canHumanAct()) {
-    return false;
+    return;
   }
 
-  if (state.pendingTarget) {
-    showMessage("Escolha o alvo destacado antes de jogar outra carta.");
-    return false;
-  }
-
+  const player = state.players[0];
   const card = player.hand[handIndex];
 
-  if (!card) {
-    return false;
+  if (!card || !canPlayCard(player, card)) {
+    showMessage("Essa carta não pode ser jogada agora.");
+    return;
   }
 
-  if (card.type === "pact") {
-    return summonPact(player, handIndex);
-  }
-
-  return castSpell(player, handIndex);
-}
-
-function summonPact(player, source, options = {}) {
-  if (state.gameOver) {
-    return false;
-  }
-
-  const fromHand = Number.isInteger(source);
-  const sourceCard = fromHand ? player.hand[source] : source;
-
-  if (!sourceCard || (sourceCard.type !== "pact" && sourceCard.type !== "primordial")) {
-    return false;
-  }
-
-  const emptySlot = player.field.findIndex((slot) => slot === null);
-
-  if (emptySlot === -1) {
-    showMessage("O campo está cheio. O limite é de 3 Pactos ativos.");
-    return false;
-  }
-
-  if (player.mana < sourceCard.cost) {
-    showMessage(`Mana insuficiente para invocar ${sourceCard.name}.`);
-    return false;
-  }
-
-  if (!fromHand && !options.primordial) {
-    return false;
-  }
-
-  if (options.primordial && !canInvokePrimordial(player)) {
-    showMessage("O Pacto Primordial ainda não pode ser invocado.");
-    return false;
-  }
-
-  player.mana -= sourceCard.cost;
-
-  if (fromHand) {
-    player.hand.splice(source, 1);
-  }
-
-  const fieldCard = createCard(sourceCard.key);
-  fieldCard.ownerIndex = player.index;
-  fieldCard.summonedOnTurn = player.turnsTaken;
-  player.field[emptySlot] = fieldCard;
-  fieldCard.currentHealth = getMaxHealth(fieldCard);
-
-  if (fieldCard.type === "primordial") {
-    player.primordialSummoned = true;
-  }
-
-  logAction(`${player.heroName} invocou ${fieldCard.name}.`);
-  showBattleFeedback("summon", fieldCard.name);
-  playSfx(fieldCard.type === "primordial" ? "summon" : "summon");
-  handleSummonEffect(fieldCard, { bot: player.role === "bot" });
-  clampAllPacts();
-  checkVictory();
-  updateUI();
-  return true;
-}
-
-function castSpell(player, handIndex, options = {}) {
-  if (state.gameOver) {
-    return false;
-  }
-
-  const card = player.hand[handIndex];
-
-  if (!card) {
-    return false;
-  }
-
-  if (player.mana < card.cost) {
-    showMessage(`Mana insuficiente para lançar ${card.name}.`);
-    return false;
-  }
-
-  const targetRule = getSpellTargetRule(card, player);
-
-  if (player.role === "bot") {
-    const target = targetRule ? chooseBotSpellTarget(card, player) : null;
-
-    if (targetRule && !target) {
-      return false;
-    }
-
-    const paidCard = paySpell(player, handIndex);
-    resolveSpellEffect(player, paidCard, target);
-    return true;
-  }
-
-  if (targetRule) {
-    const hasTarget = getAllPactTargets().some((target) => targetRule.validTarget(target));
-
-    if (!hasTarget) {
-      showMessage(`Não há alvo válido para ${card.name}.`);
-      return false;
-    }
-
-    requestTarget(targetRule.message, targetRule.validTarget, (target) => {
-      const currentIndex = player.hand.findIndex((candidate) => candidate.id === card.id);
-
-      if (currentIndex === -1) {
-        showMessage("A carta não está mais na mão.");
-        return;
+  const targetRule = getCardTargetRule(card);
+  if (targetRule && hasValidTargets(player, targetRule)) {
+    requestTarget({
+      message: `Escolha o alvo para ${card.name}.`,
+      validTarget: (target) => isValidTargetForRule(player, targetRule, target),
+      resolve: (target) => {
+        const currentIndex = player.hand.findIndex((handCard) => handCard.id === card.id);
+        if (currentIndex !== -1) {
+          playCardWithTarget(player, currentIndex, target);
+        }
       }
-
-      const paidCard = paySpell(player, currentIndex);
-      resolveSpellEffect(player, paidCard, target);
     });
-    return true;
+    return;
   }
 
-  const paidCard = paySpell(player, handIndex);
-  resolveSpellEffect(player, paidCard, null);
-  return true;
+  playCardWithTarget(player, handIndex, null);
 }
 
-function paySpell(player, handIndex) {
+function playCardWithTarget(player, handIndex, target) {
   const card = player.hand[handIndex];
+
+  if (!card || player.mana < card.cost) {
+    showMessage("Mana insuficiente.");
+    return;
+  }
+
   player.mana -= card.cost;
   player.hand.splice(handIndex, 1);
   player.discard.push(card);
-  logAction(`${player.heroName} lançou ${card.name}.`);
-  showBattleFeedback("spell", card.name);
-  playSfx("summon");
-  return card;
-}
-
-function getSpellTargetRule(card, player) {
-  const opponent = getOpponent(player.index);
-  const enemyPact = (target) => target.type === "pact" && target.playerIndex === opponent.index && Boolean(target.card);
-  const alliedPact = (target) => target.type === "pact" && target.playerIndex === player.index && Boolean(target.card);
-  const alliedFire = (target) => alliedPact(target) && target.card.element === "fire";
-
-  const rules = {
-    chuvaBrasas: {
-      message: "Escolha um Pacto inimigo para receber 2 de dano.",
-      validTarget: enemyPact
-    },
-    furiaVulcanica: {
-      message: "Escolha um Pacto de Fogo aliado para receber +3 Ataque.",
-      validTarget: alliedFire
-    },
-    fornalhaInsaciavel: {
-      message: "Escolha um Pacto aliado para destruir.",
-      validTarget: alliedPact
-    },
-    mareRestauradora: {
-      message: "Escolha um Pacto aliado para curar 3 de Vida.",
-      validTarget: alliedPact
-    },
-    correnteRetorno: {
-      message: "Escolha um Pacto inimigo para devolver à mão.",
-      validTarget: enemyPact
-    },
-    escudoMares: {
-      message: "Escolha um Pacto aliado para receber +3 Vida.",
-      validTarget: alliedPact
-    },
-    julgamentoLeviata: {
-      message: "Escolha um Pacto inimigo para receber 4 de dano.",
-      validTarget: enemyPact
-    }
-  };
-
-  return rules[card.key] || null;
-}
-
-function resolveSpellEffect(player, card, target) {
-  const opponent = getOpponent(player.index);
-
-  switch (card.key) {
-    case "chuvaBrasas":
-      damagePact(target.card, 2, card.name);
-      break;
-    case "furiaVulcanica":
-      addAttackModifier(target.card, 3, { phase: "end", ownerIndex: player.index, turn: player.turnsTaken });
-      logAction(`${target.card.name} recebeu +3 Ataque até o final do turno.`);
-      break;
-    case "ritualSetimaChama":
-      drawCard(player, 2);
-      player.sanity += 1;
-      logAction(`${player.heroName} ganhou 1 de Sanidade.`);
-      break;
-    case "fornalhaInsaciavel":
-      destroyPact(target.playerIndex, target.slot, { source: card.name });
-      player.mana += 3;
-      logAction(`${player.heroName} recebeu 3 Mana.`);
-      break;
-    case "apocalipseCarmesim":
-      logAction("Apocalipse Carmesim causou 3 de dano a todos os Pactos inimigos.");
-      damageAllPacts(opponent, 3, card.name);
-      break;
-    case "mareRestauradora":
-      healPact(target.card, 3);
-      break;
-    case "correnteRetorno":
-      returnPactToHand(target.card);
-      break;
-    case "cancaoAbissal":
-      drawCard(player, 2);
-      break;
-    case "escudoMares":
-      addHealthModifier(target.card, 3, { phase: "end", ownerIndex: player.index, turn: player.turnsTaken + 1 });
-      logAction(`${target.card.name} recebeu +3 Vida até o final do próximo turno.`);
-      break;
-    case "julgamentoLeviata":
-      damagePact(target.card, 4, card.name);
-      break;
-    default:
-      break;
-  }
-
-  clampAllPacts();
-  checkVictory();
+  logAction(`${player.heroName} jogou ${card.name}.`);
+  resolvePlayedCard(player, card, target);
+  checkGameOver();
   updateUI();
 }
 
-function handleSummonEffect(card, options = {}) {
-  const player = state.players[card.ownerIndex];
-  const opponent = getOpponent(player.index);
-  const bot = options.bot;
-
-  switch (card.key) {
-    case "cinzamor":
-      handleTargetedEffect(
-        bot,
-        "Escolha um Pacto inimigo para receber 1 de dano.",
-        (target) => target.playerIndex === opponent.index && Boolean(target.card),
-        (target) => damagePact(target.card, 1, card.name),
-        () => chooseWeakestPact(opponent)
-      );
+function resolvePlayedCard(player, card, target) {
+  switch (card.action) {
+    case "realmFornalha":
+      setRealm(player, card);
+      damageAllEnemyPacts(player, 1, card);
       break;
-    case "solferro":
-      logAction("Solferro causou 2 de dano a todos os Pactos inimigos.");
-      damageAllPacts(opponent, 2, card.name);
+    case "realmTrono":
+      setRealm(player, card);
+      if (target && target.card) {
+        addTemporaryAttack(target.card, 2);
+        logAction(`${target.card.name} recebeu +2 Ataque neste turno.`);
+      }
       break;
-    case "devorabrasa":
-      handleTargetedEffect(
-        bot,
-        "Escolha um Pacto inimigo com 3 de Vida ou menos para destruir.",
-        (target) => target.playerIndex === opponent.index && target.card && target.card.currentHealth <= 3,
-        (target) => destroyPact(target.playerIndex, target.slot, { source: card.name }),
-        () => chooseWeakestPact(opponent, (target) => target.card.currentHealth <= 3)
-      );
+    case "realmMare":
+      setRealm(player, card);
+      if (target && target.card) {
+        healPact(target.card, 3, player);
+      }
       break;
-    case "thalora":
-      handleTargetedEffect(
-        bot,
-        "Escolha um Pacto aliado para curar 1 de Vida.",
-        (target) => target.playerIndex === player.index && Boolean(target.card),
-        (target) => healPact(target.card, 1),
-        () => chooseWoundedAlly(player) || firstPactTarget(player)
-      );
+    case "realmAbismo":
+      setRealm(player, card);
+      if (target && target.card) {
+        const owner = state.players[target.playerIndex];
+        target.card.abilitiesBlockedUntilTurn = owner.turnsTaken + 1;
+        logAction(`${target.card.name} não poderá usar habilidades no próximo turno.`);
+      }
       break;
-    case "nauren":
+    case "spellDamage2":
+      dealDamageToTarget(target, 2, card);
+      break;
+    case "spellDamage4":
+      dealDamageToTarget(target, 4, card);
+      break;
+    case "spellAllyAttack3":
+      addTemporaryAttack(target.card, 3);
+      logAction(`${target.card.name} recebeu +3 Ataque neste turno.`);
+      break;
+    case "draw2Madness1":
+      player.madness += 1;
+      drawCard(player, 2);
+      logAction(`${player.heroName} ganhou 1 Loucura.`);
+      break;
+    case "draw2":
+      drawCard(player, 2);
+      break;
+    case "destroyAllyGainMana3":
+      destroyPact(target.card, card, { sacrifice: true });
+      player.mana = Math.min(player.manaMax, player.mana + 3);
+      logAction(`${player.heroName} recuperou 3 Mana.`);
+      break;
+    case "enemyPactsDamage3":
+      damageAllEnemyPacts(player, 3, card);
+      break;
+    case "spellHeal3":
+      healPact(target.card, 3, player);
+      break;
+    case "freezeEnemy":
+      freezePact(target.card);
+      break;
+    case "spellTempHealth3":
+      addTemporaryHealth(target.card, 3);
+      break;
+    case "equipAttack1":
+      target.card.permanentAttack += 1;
+      logAction(`${target.card.name} recebeu +1 Ataque permanente.`);
+      break;
+    case "madness1Draw1":
+      player.madness += 1;
+      drawCard(player, 1);
+      logAction(`${player.heroName} ganhou 1 Loucura.`);
+      break;
+    case "equipHealth1Heal2":
+      target.card.permanentHealth += 1;
+      healPact(target.card, 2, player);
+      logAction(`${target.card.name} recebeu +1 Vida permanente.`);
+      break;
+    case "healHero2Draw1":
+      healHero(player, 2);
       drawCard(player, 1);
       break;
-    case "nereth":
-      handleTargetedEffect(
-        bot,
-        "Escolha um Pacto inimigo de custo 2 ou menos para devolver à mão.",
-        (target) => target.playerIndex === opponent.index && target.card && target.card.cost <= 2,
-        (target) => returnPactToHand(target.card),
-        () => chooseWeakestPact(opponent, (target) => target.card.cost <= 2)
-      );
-      break;
-    case "velkaris":
-      handleTargetedEffect(
-        bot,
-        "Escolha um Pacto inimigo para receber -2 Ataque.",
-        (target) => target.playerIndex === opponent.index && Boolean(target.card),
-        (target) => {
-          const targetOwner = state.players[target.playerIndex];
-          addAttackModifier(target.card, -2, { phase: "end", ownerIndex: targetOwner.index, turn: targetOwner.turnsTaken + 1 });
-          logAction(`${target.card.name} recebeu -2 Ataque até o final do próximo turno de ${targetOwner.heroName}.`);
-        },
-        () => chooseHighestAttackPact(opponent)
-      );
-      break;
     default:
       break;
   }
 }
 
-function handleTargetedEffect(isBot, message, validTarget, onTarget, botChooser) {
-  const hasTarget = getAllPactTargets().some((target) => validTarget(target));
-
-  if (!hasTarget) {
-    return false;
-  }
-
-  if (isBot) {
-    const target = botChooser();
-
-    if (target && validTarget(target)) {
-      onTarget(target);
-    }
-
-    return true;
-  }
-
-  requestTarget(message, (target) => target.type === "pact" && validTarget(target), onTarget);
-  return true;
-}
-
-function requestTarget(message, validTarget, onSelect) {
-  state.selectedAttackerId = null;
-  state.pendingTarget = {
-    message,
-    validTarget,
-    onSelect
-  };
-  state.statusMessage = message;
-  updateUI();
-}
-
-function resolvePendingTarget(target) {
-  if (!state.pendingTarget) {
-    return false;
-  }
-
-  if (!state.pendingTarget.validTarget(target)) {
-    showMessage("Esse alvo não é válido.");
-    return false;
-  }
-
-  const action = state.pendingTarget;
-  state.pendingTarget = null;
-  action.onSelect(target);
+function setRealm(player, card) {
+  const realm = createCard(card.key);
+  realm.ownerIndex = player.index;
+  player.realm = realm;
+  logAction(`${player.heroName} ativou o Reino ${realm.name}.`);
   clampAllPacts();
-  checkVictory();
-  updateUI();
-  return true;
-}
-
-function attack(attackerRef, defenderRef) {
-  if (state.gameOver) {
-    return false;
-  }
-
-  const attackerLocation = getPactLocation(attackerRef.cardId);
-  const attacker = attackerLocation ? attackerLocation.card : null;
-
-  if (!attacker || attacker.ownerIndex !== state.activePlayerIndex) {
-    showMessage("Selecione um Pacto aliado ativo para atacar.");
-    return false;
-  }
-
-  if (!canAttack(attacker)) {
-    showMessage(`${attacker.name} não pode atacar agora.`);
-    state.selectedAttackerId = null;
-    updateUI();
-    return false;
-  }
-
-  if (defenderRef.type === "hero") {
-    return directAttack(attackerRef, defenderRef.playerIndex);
-  }
-
-  const defenderLocation = getPactLocation(defenderRef.cardId);
-  const defender = defenderLocation ? defenderLocation.card : null;
-
-  if (!defender || defender.ownerIndex === attacker.ownerIndex) {
-    showMessage("Escolha um Pacto inimigo para atacar.");
-    return false;
-  }
-
-  applyAttackTriggers(attacker);
-  const attackValue = getAttack(attacker);
-  const defenderHealthBefore = defender.currentHealth;
-  attacker.hasAttacked = true;
-  state.selectedAttackerId = null;
-
-  logAction(`${attacker.name} atacou ${defender.name}.`);
-  showBattleFeedback("attack", `${attacker.name} ataca`);
-  playSfx("attack");
-  const result = damagePact(defender, attackValue, attacker.name);
-
-  if (attacker.key === "umbraMar" && attackValue > 0) {
-    healHero(state.players[attacker.ownerIndex], 1);
-    logAction("Umbra-Mar curou 1 de Vida do Herói aliado.");
-  }
-
-  if (result.destroyed) {
-    const defenderPlayer = state.players[defenderLocation.playerIndex];
-    const excess = Math.max(0, attackValue - defenderHealthBefore);
-    damageHero(defenderPlayer, excess > 0 ? excess : 1, attacker.name);
-
-    if (attacker.key === "ignivar") {
-      state.players[attacker.ownerIndex].mana += 1;
-      logAction("Ignivar recebeu 1 Mana por destruir um Pacto em combate.");
-    }
-
-    if (attacker.key === "reiChamas") {
-      healHero(state.players[attacker.ownerIndex], 1);
-      logAction("Rei das Chamas Eternas curou 1 de Vida do Herói aliado.");
-    }
-  }
-
-  clampAllPacts();
-  checkVictory();
-  updateUI();
-  return true;
-}
-
-function directAttack(attackerRef, defenderPlayerIndex) {
-  const attackerLocation = getPactLocation(attackerRef.cardId);
-  const attacker = attackerLocation ? attackerLocation.card : null;
-  const attackerOwner = attacker ? state.players[attacker.ownerIndex] : null;
-  const defender = state.players[defenderPlayerIndex];
-
-  if (!attacker || !attackerOwner || !defender) {
-    return false;
-  }
-
-  if (defender.field.some(Boolean)) {
-    showMessage("Ataque direto só é permitido se o oponente não tiver Pactos no campo.");
-    return false;
-  }
-
-  if (attacker.summonedOnTurn === attackerOwner.turnsTaken) {
-    showMessage("Pactos recém-invocados não podem atacar diretamente o Herói.");
-    return false;
-  }
-
-  applyAttackTriggers(attacker);
-  const attackValue = getAttack(attacker);
-  attacker.hasAttacked = true;
-  state.selectedAttackerId = null;
-  damageHero(defender, attackValue, attacker.name);
-  logAction(`${attacker.name} atacou diretamente ${defender.heroName}.`);
-  showBattleFeedback("attack", `-${attackValue}`);
-  playSfx("attack");
-  checkVictory();
-  updateUI();
-  return true;
-}
-
-function applyAttackTriggers(attacker) {
-  const owner = state.players[attacker.ownerIndex];
-
-  if (attacker.key === "varkhan") {
-    const fireAllies = owner.field.filter((ally) => ally && ally.id !== attacker.id && ally.element === "fire").length;
-
-    if (fireAllies > 0) {
-      addAttackModifier(attacker, fireAllies, { phase: "end", ownerIndex: owner.index, turn: owner.turnsTaken });
-      logAction(`Varkhan recebeu +${fireAllies} Ataque até o final do turno.`);
-    }
-  }
-
-  if (attacker.key === "marem") {
-    addHealthModifier(attacker, 1, { phase: "start", ownerIndex: owner.index, turn: owner.turnsTaken + 1 });
-    logAction("Marem recebeu +1 Vida até o início do próximo turno do dono.");
-  }
-}
-
-function destroyPact(playerIndex, slot, options = {}) {
-  const player = state.players[playerIndex];
-  const card = player.field[slot];
-
-  if (!card) {
-    return { destroyed: false, saved: false };
-  }
-
-  if (tryRubrakarSave(player, card)) {
-    return { destroyed: false, saved: true };
-  }
-
-  player.field[slot] = null;
-
-  if (card.type === "primordial") {
-    player.primordialSummoned = false;
-    player.primordialDestroyed = true;
-  }
-
-  clearTemporaryEffects(card);
-  player.discard.push(card);
-  logAction(`${card.name} foi destruído${options.source ? ` por ${options.source}` : ""}.`);
-  showBattleFeedback("destroy", card.name);
-  playSfx("destroy");
-  return { destroyed: true, saved: false, card };
-}
-
-function endTurn() {
-  if (state.gameOver || state.pendingTarget) {
-    if (state.pendingTarget) {
-      showMessage("Escolha o alvo destacado antes de encerrar o turno.");
-    }
-    return;
-  }
-
-  const player = state.players[state.activePlayerIndex];
-  playSfx("endTurn");
-  discardDownToLimit(player);
-  expireEffectsFor(player.index, player.turnsTaken, "end");
-  state.selectedAttackerId = null;
-  state.botThinking = false;
-  const nextPlayer = getOpponent(player.index);
-  beginTurn(nextPlayer.index);
-}
-
-async function botTurn(battleId = state.battleId) {
-  const bot = state.players[state.activePlayerIndex];
-
-  if (!bot || bot.role !== "bot" || state.gameOver || battleId !== state.battleId) {
-    return;
-  }
-
-  state.botThinking = true;
-  state.statusMessage = "O bot está pensando...";
-  updateUI();
-
-  await sleep(BOT_DELAY);
-  if (!isSameBotTurn(bot, battleId)) {
-    return;
-  }
-
-  if (canInvokePrimordial(bot)) {
-    summonPact(bot, bot.primordial, { primordial: true });
-    await sleep(BOT_DELAY);
-  }
-
-  let actions = 0;
-  while (actions < 5 && isSameBotTurn(bot, battleId)) {
-    const pactIndex = chooseBestPlayablePact(bot);
-
-    if (pactIndex !== -1) {
-      summonPact(bot, pactIndex);
-      actions += 1;
-      await sleep(BOT_DELAY);
-      continue;
-    }
-
-    const spellIndex = chooseUsefulSpell(bot);
-
-    if (spellIndex !== -1) {
-      castSpell(bot, spellIndex, { bot: true });
-      actions += 1;
-      await sleep(BOT_DELAY);
-      continue;
-    }
-
-    break;
-  }
-
-  const attackerIds = bot.field.filter(Boolean).map((card) => card.id);
-
-  for (const cardId of attackerIds) {
-    if (!isSameBotTurn(bot, battleId) || state.gameOver) {
-      return;
-    }
-
-    const location = getPactLocation(cardId);
-    const attacker = location ? location.card : null;
-
-    if (!attacker || !canAttack(attacker)) {
-      continue;
-    }
-
-    const target = chooseBotAttackTarget(attacker);
-
-    if (target) {
-      attack({ cardId: attacker.id }, target);
-      await sleep(BOT_DELAY);
-    }
-  }
-
-  if (isSameBotTurn(bot, battleId) && !state.gameOver) {
-    state.botThinking = false;
-    endTurn();
-  }
-}
-
-function checkVictory() {
-  if (state.gameOver) {
-    return false;
-  }
-
-  const defeated = state.players.find((player) => player.life <= 0);
-
-  if (!defeated) {
-    return false;
-  }
-
-  const winner = getOpponent(defeated.index);
-  state.gameOver = true;
-  state.winnerIndex = winner.index;
-  state.pendingTarget = null;
-  state.selectedAttackerId = null;
-  state.botThinking = false;
-  state.screen = "result";
-  logAction(`${winner.heroName} venceu a partida.`);
-  playSfx(winner.index === 0 ? "victory" : "defeat");
-  updateUI();
-  return true;
-}
-
-function getSanityState(value) {
-  if (value >= 10) {
-    return { label: "Louco", className: "sanity-mad" };
-  }
-
-  if (value >= 6) {
-    return { label: "Perturbado", className: "sanity-disturbed" };
-  }
-
-  if (value >= 3) {
-    return { label: "Instável", className: "sanity-unstable" };
-  }
-
-  return { label: "Normal", className: "sanity-normal" };
-}
-
-function logAction(message) {
-  state.log.push(message);
-  state.statusMessage = message;
-}
-
-function damagePact(card, amount, source) {
-  const location = getPactLocation(card.id);
-
-  if (!location || amount <= 0) {
-    return { destroyed: false, saved: false };
-  }
-
-  const liveCard = location.card;
-  liveCard.currentHealth -= amount;
-  logAction(`${source} causou ${amount} de dano a ${liveCard.name}.`);
-  showBattleFeedback("damage", `-${amount}`);
-  playSfx("damage");
-
-  if (liveCard.currentHealth <= 0) {
-    return destroyPact(location.playerIndex, location.slot, { source });
-  }
-
-  return { destroyed: false, saved: false };
-}
-
-function damageAllPacts(player, amount, source) {
-  const targetIds = player.field.filter(Boolean).map((card) => card.id);
-
-  targetIds.forEach((cardId) => {
-    const location = getPactLocation(cardId);
-
-    if (location) {
-      damagePact(location.card, amount, source);
-    }
-  });
-}
-
-function healPact(card, amount, options = {}) {
-  const location = getPactLocation(card.id);
-
-  if (!location || amount <= 0) {
-    return 0;
-  }
-
-  const liveCard = location.card;
-  const before = liveCard.currentHealth;
-  liveCard.currentHealth = Math.min(getMaxHealth(liveCard), liveCard.currentHealth + amount);
-  const healed = liveCard.currentHealth - before;
-
-  if (healed > 0 && !options.silent) {
-    logAction(`${liveCard.name} curou ${healed} de Vida.`);
-    showBattleFeedback("heal", `+${healed}`);
-    playSfx("heal");
-  }
-
-  return healed;
-}
-
-function healHero(player, amount) {
-  const before = player.life;
-  player.life = Math.min(player.maxLife, player.life + amount);
-  return player.life - before;
-}
-
-function damageHero(player, amount, source) {
-  if (amount <= 0) {
-    return;
-  }
-
-  player.life -= amount;
-  logAction(`${source} causou ${amount} de dano ao Herói ${player.heroName}.`);
-  showBattleFeedback("damage", `-${amount}`);
-  playSfx("damage");
-}
-
-function returnPactToHand(card) {
-  const location = getPactLocation(card.id);
-
-  if (!location) {
-    return false;
-  }
-
-  const owner = state.players[location.playerIndex];
-  owner.field[location.slot] = null;
-
-  if (card.type === "primordial") {
-    owner.primordialSummoned = false;
-    owner.primordialDestroyed = false;
-    owner.primordial = createCard(card.key);
-    owner.primordial.ownerIndex = owner.index;
-    logAction(`${card.name} voltou para o painel Primordial de ${owner.heroName}.`);
-    return true;
-  }
-
-  const returnedCard = createCard(card.key);
-  returnedCard.ownerIndex = owner.index;
-  owner.hand.push(returnedCard);
-  logAction(`${card.name} voltou para a mão de ${owner.heroName}.`);
-  return true;
-}
-
-function getAttack(card) {
-  const owner = state.players[card.ownerIndex];
-  const realmBonus = owner.element === "fire" && card.element === "fire" ? 1 : 0;
-  const braseonBonus = owner.field.filter((ally) => (
-    ally &&
-    ally.key === "braseon" &&
-    ally.id !== card.id &&
-    card.element === "fire"
-  )).length;
-  const modifiers = card.attackModifiers.reduce((total, modifier) => total + modifier.amount, 0);
-
-  return Math.max(0, card.baseAttack + realmBonus + braseonBonus + modifiers);
-}
-
-function getMaxHealth(card) {
-  const owner = state.players[card.ownerIndex];
-  const realmBonus = owner.element === "water" && card.element === "water" ? 1 : 0;
-  const lysoraBonus = owner.field.filter((ally) => (
-    ally &&
-    ally.key === "lysora" &&
-    ally.id !== card.id &&
-    card.element === "water"
-  )).length;
-  const modifiers = card.healthModifiers.reduce((total, modifier) => total + modifier.amount, 0);
-
-  return Math.max(1, card.baseHealth + realmBonus + lysoraBonus + modifiers);
-}
-
-function addAttackModifier(card, amount, expires) {
-  const location = getPactLocation(card.id);
-
-  if (!location) {
-    return;
-  }
-
-  location.card.attackModifiers.push({
-    amount,
-    expires
-  });
-}
-
-function addHealthModifier(card, amount, expires) {
-  const location = getPactLocation(card.id);
-
-  if (!location) {
-    return;
-  }
-
-  location.card.healthModifiers.push({
-    amount,
-    expires
-  });
-  location.card.currentHealth += amount;
-}
-
-function expireEffectsFor(ownerIndex, turn, phase) {
-  state.players.forEach((player) => {
-    player.field.forEach((card) => {
-      if (!card) {
-        return;
-      }
-
-      card.attackModifiers = card.attackModifiers.filter((modifier) => !effectExpired(modifier.expires, ownerIndex, turn, phase));
-      card.healthModifiers = card.healthModifiers.filter((modifier) => !effectExpired(modifier.expires, ownerIndex, turn, phase));
-      card.currentHealth = Math.min(card.currentHealth, getMaxHealth(card));
-    });
-  });
-}
-
-function effectExpired(expires, ownerIndex, turn, phase) {
-  return Boolean(
-    expires &&
-    expires.phase === phase &&
-    expires.ownerIndex === ownerIndex &&
-    expires.turn <= turn
-  );
-}
-
-function clearTemporaryEffects(card) {
-  card.attackModifiers = [];
-  card.healthModifiers = [];
-}
-
-function discardDownToLimit(player) {
-  while (player.hand.length > MAX_HAND) {
-    const discarded = player.hand.pop();
-    player.discard.push(discarded);
-    logAction(`${player.heroName} descartou automaticamente ${discarded.name} por exceder o limite de mão.`);
-  }
-}
-
-function tryRubrakarSave(player, card) {
-  if (
-    card.key === "rubrakar" ||
-    card.element !== "fire" ||
-    player.rubrakarSaveUsed ||
-    !hasPact(player, "rubrakar")
-  ) {
-    return false;
-  }
-
-  player.rubrakarSaveUsed = true;
-  card.currentHealth = 1;
-  logAction(`Rubrakar salvou ${card.name}, que sobreviveu com 1 de Vida.`);
-  return true;
 }
 
 function canPlayCard(player, card) {
-  if (!canHumanAct() || state.pendingTarget || player.mana < card.cost) {
-    return false;
-  }
-
-  if (card.type === "pact") {
-    return player.field.some((slot) => slot === null);
-  }
-
-  return true;
-}
-
-function canHumanAct() {
-  return (
-    state.players.length > 0 &&
-    !state.gameOver &&
-    !state.botThinking &&
-    state.activePlayerIndex === 0 &&
-    state.players[0].role === "human"
+  return Boolean(
+    canHumanAct() &&
+    !state.pendingTarget &&
+    card &&
+    card.type !== "pact" &&
+    card.type !== "hero" &&
+    card.type !== "primordial" &&
+    player.mana >= card.cost
   );
 }
 
-function canAttack(card) {
-  if (
-    !card ||
-    state.gameOver ||
-    state.pendingTarget ||
-    card.hasAttacked ||
-    card.ownerIndex !== state.activePlayerIndex
-  ) {
-    return false;
-  }
-
-  if (state.players[state.activePlayerIndex].role === "bot" && !state.botThinking) {
-    return false;
-  }
-
-  const owner = state.players[card.ownerIndex];
-  const opponent = getOpponent(owner.index);
-  const opponentHasPacts = opponent.field.some(Boolean);
-  const fresh = card.summonedOnTurn === owner.turnsTaken;
-
-  return opponentHasPacts || !fresh;
+function getCardTargetRule(card) {
+  return card.target || null;
 }
 
-function canHeroBeDirectTarget(player) {
-  if (!state.selectedAttackerId || player.index === state.activePlayerIndex || player.field.some(Boolean)) {
-    return false;
+function usePactAbility(cardId, abilityIndex) {
+  if (!canHumanAct()) {
+    return;
   }
 
-  const location = getPactLocation(state.selectedAttackerId);
-  const attacker = location ? location.card : null;
-  const owner = attacker ? state.players[attacker.ownerIndex] : null;
+  const location = getPactLocation(cardId);
+  if (!location || location.playerIndex !== 0) {
+    return;
+  }
 
-  return Boolean(attacker && owner && attacker.summonedOnTurn !== owner.turnsTaken);
+  const player = state.players[location.playerIndex];
+  const card = location.card;
+  const ability = card.abilities[abilityIndex];
+
+  if (!ability || !canUsePactAbility(player, card, ability)) {
+    showMessage("Essa habilidade não pode ser usada agora.");
+    return;
+  }
+
+  if (ability.target && hasValidTargets(player, ability.target)) {
+    requestTarget({
+      message: `Escolha o alvo para ${ability.name}.`,
+      validTarget: (target) => isValidTargetForRule(player, ability.target, target),
+      resolve: (target) => resolvePactAbility(player, card, ability, target)
+    });
+    return;
+  }
+
+  resolvePactAbility(player, card, ability, null);
 }
 
-function canInvokePrimordial(player) {
-  return (
-    !player.primordialSummoned &&
-    !player.primordialDestroyed &&
-    player.turnsTaken >= 3 &&
-    player.mana >= player.primordial.cost &&
-    player.field.some((slot) => slot === null)
-  );
+function resolvePactAbility(player, card, ability, target) {
+  if (!payAbilityCost(player, card, ability)) {
+    showMessage("Recursos insuficientes.");
+    return;
+  }
+
+  card.abilityUsedTurn = player.turnsTaken;
+  logAction(`${card.name} usou ${ability.name}.`);
+
+  switch (ability.action) {
+    case "damage3":
+      dealDamageToTarget(target, 3, card);
+      break;
+    case "damage2":
+      dealDamageToTarget(target, 2, card);
+      break;
+    case "damage5":
+      dealDamageToTarget(target, 5, card);
+      break;
+    case "selfAttack3":
+      addTemporaryAttack(card, 3);
+      break;
+    case "selfTempHealth4":
+      addTemporaryHealth(card, 4);
+      break;
+    case "enemyPactsDamage2":
+      damageAllEnemyPacts(player, 2, card);
+      break;
+    case "taunt":
+      card.tauntExpiresTurn = player.turnsTaken + 1;
+      break;
+    case "allyAttack2":
+      addTemporaryAttack(target.card, 2);
+      break;
+    case "draw1":
+      drawCard(player, 1);
+      break;
+    case "heal5":
+      healPact(target.card, 5, player);
+      break;
+    default:
+      break;
+  }
+
+  checkGameOver();
+  updateUI();
 }
 
-function getPrimordialState(player) {
-  if (player.primordialDestroyed) {
-    return { label: "Destruído", className: "spent" };
-  }
-
-  if (player.primordialSummoned) {
-    return { label: "Invocado", className: "spent" };
-  }
-
-  if (player.turnsTaken < 3) {
-    return { label: `Bloqueado: Turno ${player.turnsTaken}/3`, className: "locked" };
-  }
-
-  if (canInvokePrimordial(player)) {
-    return { label: "Disponível: Pode invocar", className: "available playable effect-primordial-ready" };
-  }
-
-  return { label: "Disponível", className: "available" };
-}
-
-function isTargetable(card) {
-  if (!state.pendingTarget) {
-    return false;
-  }
-
+function canUsePactAbility(player, card, ability) {
   const location = getPactLocation(card.id);
 
   if (!location) {
     return false;
   }
 
-  return state.pendingTarget.validTarget({
-    type: "pact",
-    playerIndex: location.playerIndex,
-    slot: location.slot,
-    card
-  });
-}
-
-function getAllPactTargets() {
-  return state.players.flatMap((player) => (
-    player.field
-      .map((card, slot) => ({ type: "pact", playerIndex: player.index, slot, card }))
-      .filter((target) => Boolean(target.card))
-  ));
-}
-
-function getPactLocation(cardId) {
-  for (const player of state.players) {
-    const slot = player.field.findIndex((card) => card && card.id === cardId);
-
-    if (slot !== -1) {
-      return { playerIndex: player.index, slot, card: player.field[slot] };
-    }
-  }
-
-  return null;
-}
-
-function getOpponent(playerIndex) {
-  return state.players.find((player) => player.index !== playerIndex);
-}
-
-function hasPact(player, cardKey) {
-  return player.field.some((card) => card && card.key === cardKey);
-}
-
-function clampAllPacts() {
-  state.players.forEach((player) => {
-    player.field.forEach((card) => {
-      if (card) {
-        card.currentHealth = Math.min(card.currentHealth, getMaxHealth(card));
-      }
-    });
-  });
-}
-
-function chooseBestPlayablePact(player) {
-  if (!player.field.some((slot) => slot === null)) {
-    return -1;
-  }
-
-  let bestIndex = -1;
-  let bestScore = -1;
-
-  player.hand.forEach((card, index) => {
-    if (card.type !== "pact" || card.cost > player.mana) {
-      return;
-    }
-
-    const score = getBotPactScore(card, player);
-
-    if (score > bestScore) {
-      bestIndex = index;
-      bestScore = score;
-    }
-  });
-
-  return bestIndex;
-}
-
-function getBotPactScore(card, player) {
-  const opponent = getOpponent(player.index);
-  const emptySlots = player.field.filter((slot) => slot === null).length;
-  const enemyThreat = opponent.field.reduce((total, enemy) => total + (enemy ? getPactThreat(enemy) : 0), 0);
-  const baseScore = (card.cost * 9) + (card.baseAttack * 5) + (card.baseHealth * 3);
-  const elementBonus = card.element === player.element ? 8 : 0;
-  const survivalBonus = enemyThreat > 18 ? card.baseHealth * 2 : 0;
-  const finisherBonus = opponent.life <= getAttackPreview(card, player) + 4 ? 10 : 0;
-  const scarceSlotPenalty = emptySlots === 1 && card.cost <= 2 ? 8 : 0;
-  const effectScores = {
-    cinzamor: 12,
-    solferro: opponent.field.some(Boolean) ? 24 : 5,
-    devorabrasa: opponent.field.some((enemy) => enemy && enemy.currentHealth <= 3) ? 26 : 12,
-    thalora: chooseWoundedAlly(player) ? 14 : 6,
-    nauren: 14,
-    nereth: opponent.field.some((enemy) => enemy && enemy.cost <= 2) ? 20 : 8,
-    velkaris: opponent.field.some(Boolean) ? 22 : 10,
-    rubrakar: player.field.some((ally) => ally && ally.element === "fire") ? 18 : 8,
-    braseon: player.field.some((ally) => ally && ally.element === "fire") ? 20 : 10,
-    lysora: player.field.some((ally) => ally && ally.element === "water") ? 20 : 10,
-    umbraMar: player.life <= 12 ? 18 : 10
-  };
-
-  return baseScore + elementBonus + survivalBonus + finisherBonus + (effectScores[card.key] || 0) - scarceSlotPenalty;
-}
-
-function getAttackPreview(card, player) {
-  const realmBonus = player.element === "fire" && card.element === "fire" ? 1 : 0;
-  const braseonBonus = player.field.filter((ally) => ally && ally.key === "braseon" && card.element === "fire").length;
-
-  return Math.max(0, card.baseAttack + realmBonus + braseonBonus);
-}
-
-function chooseUsefulSpell(player) {
-  let bestIndex = -1;
-  let bestScore = -1;
-
-  player.hand.forEach((card, index) => {
-    if (card.type !== "spell" || card.cost > player.mana) {
-      return;
-    }
-
-    const targetRule = getSpellTargetRule(card, player);
-    const target = targetRule ? chooseBotSpellTarget(card, player) : null;
-
-    if (targetRule && !target) {
-      return;
-    }
-
-    const score = getBotSpellScore(card, player, target);
-
-    if (score > bestScore) {
-      bestIndex = index;
-      bestScore = score;
-    }
-  });
-
-  return bestIndex;
-}
-
-function getBotSpellScore(card, player, target) {
-  const opponent = getOpponent(player.index);
-  const opponentThreat = opponent.field.reduce((total, enemy) => total + (enemy ? getPactThreat(enemy) : 0), 0);
-
-  switch (card.key) {
-    case "apocalipseCarmesim":
-      return opponent.field.some(Boolean) ? 82 + opponent.field.filter(Boolean).length * 8 + Math.min(24, opponentThreat) : 0;
-    case "julgamentoLeviata":
-      return target ? 78 + getPactThreat(target.card) + (target.card.currentHealth <= 4 ? 14 : 0) : 0;
-    case "chuvaBrasas":
-      return target ? 66 + getPactThreat(target.card) + (target.card.currentHealth <= 2 ? 14 : 0) : 0;
-    case "mareRestauradora":
-      return target ? 58 + (getMaxHealth(target.card) - target.card.currentHealth) * 8 + getPactThreat(target.card) : 0;
-    case "correnteRetorno":
-      return target ? 62 + getPactThreat(target.card) + target.card.cost : 0;
-    case "furiaVulcanica":
-      return target ? 54 + getPactThreat(target.card) : 0;
-    case "escudoMares":
-      return target ? 50 + getPactThreat(target.card) : 0;
-    case "cancaoAbissal":
-    case "ritualSetimaChama":
-      return player.hand.length <= 5 ? 55 : 30;
-    default:
-      return 0;
-  }
-}
-
-function chooseBotSpellTarget(card, player) {
-  const opponent = getOpponent(player.index);
-
-  switch (card.key) {
-    case "chuvaBrasas":
-      return chooseBestDamageTarget(opponent, 2);
-    case "julgamentoLeviata":
-      return chooseBestDamageTarget(opponent, 4);
-    case "furiaVulcanica":
-      return chooseHighestAttackPact(player, (target) => target.card.element === "fire");
-    case "fornalhaInsaciavel":
-      return chooseWeakestPact(player);
-    case "mareRestauradora":
-      return chooseWoundedAlly(player);
-    case "correnteRetorno":
-      return chooseHighestCostPact(opponent);
-    case "escudoMares":
-      return chooseWeakestPact(player);
-    default:
-      return null;
-  }
-}
-
-function chooseBotAttackTarget(attacker) {
-  const opponent = getOpponent(attacker.ownerIndex);
-  const attackValue = getAttack(attacker);
-  const enemyTargets = opponent.field
-    .map((card, slot) => ({ type: "pact", playerIndex: opponent.index, slot, card }))
-    .filter((target) => Boolean(target.card));
-
-  if (enemyTargets.length === 0) {
-    const owner = state.players[attacker.ownerIndex];
-
-    if (attacker.summonedOnTurn !== owner.turnsTaken) {
-      return { type: "hero", playerIndex: opponent.index };
-    }
-
-    return null;
-  }
-
-  const killable = enemyTargets
-    .filter((target) => target.card.currentHealth <= attackValue)
-    .sort((a, b) => getPactThreat(b.card) - getPactThreat(a.card));
-
-  if (killable.length > 0) {
-    return { type: "pact", cardId: killable[0].card.id };
-  }
-
-  const dangerous = enemyTargets
-    .sort((a, b) => getPactThreat(b.card) - getPactThreat(a.card))[0];
-
-  return { type: "pact", cardId: dangerous.card.id };
-}
-
-function chooseBestDamageTarget(player, damage) {
-  const targets = getPlayerTargets(player);
-  const killable = targets
-    .filter((target) => target.card.currentHealth <= damage)
-    .sort((a, b) => getPactThreat(b.card) - getPactThreat(a.card));
-
-  if (killable.length > 0) {
-    return killable[0];
-  }
-
-  return targets.sort((a, b) => getPactThreat(b.card) - getPactThreat(a.card))[0] || null;
-}
-
-function getPactThreat(card) {
-  return (getAttack(card) * 3) + card.currentHealth + (card.cost * 2);
-}
-
-function chooseWeakestPact(player, predicate = () => true) {
-  return getPlayerTargets(player)
-    .filter(predicate)
-    .sort((a, b) => a.card.currentHealth - b.card.currentHealth)[0] || null;
-}
-
-function chooseHighestAttackPact(player, predicate = () => true) {
-  return getPlayerTargets(player)
-    .filter(predicate)
-    .sort((a, b) => getAttack(b.card) - getAttack(a.card))[0] || null;
-}
-
-function chooseHighestCostPact(player) {
-  return getPlayerTargets(player)
-    .sort((a, b) => b.card.cost - a.card.cost)[0] || null;
-}
-
-function chooseWoundedAlly(player) {
-  return getPlayerTargets(player)
-    .filter((target) => target.card.currentHealth < getMaxHealth(target.card))
-    .sort((a, b) => (getMaxHealth(b.card) - b.card.currentHealth) - (getMaxHealth(a.card) - a.card.currentHealth))[0] || null;
-}
-
-function firstPactTarget(player) {
-  return getPlayerTargets(player)[0] || null;
-}
-
-function getPlayerTargets(player) {
-  return player.field
-    .map((card, slot) => ({ type: "pact", playerIndex: player.index, slot, card }))
-    .filter((target) => Boolean(target.card));
-}
-
-function isSameBotTurn(bot, battleId) {
-  return (
-    battleId === state.battleId &&
-    !state.gameOver &&
-    state.players[state.activePlayerIndex] &&
-    state.players[state.activePlayerIndex].index === bot.index &&
-    bot.role === "bot"
+  return Boolean(
+    canHumanAct() &&
+    location.playerIndex === player.index &&
+    location.slot !== ACTIVE_SLOT &&
+    card.abilityUsedTurn !== player.turnsTaken &&
+    !state.pendingTarget &&
+    !isAbilityBlocked(card) &&
+    hasResources(player, getDiscountedCost(player, card, ability))
   );
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
+function getDiscountedCost(player, card, ability) {
+  const cost = { ...(ability.cost || {}) };
+  const realmKey = player.realm ? player.realm.key : "";
+  const canDiscountFire = realmKey === "tronoVulcanico" && card.element === "fire" && !player.discountsUsed.fire;
+  const canDiscountWater = realmKey === "abismoSilencioso" && card.element === "water" && !player.discountsUsed.water;
+
+  if ((canDiscountFire || canDiscountWater) && cost.mana) {
+    cost.mana = Math.max(0, cost.mana - 1);
+  }
+
+  return cost;
 }
 
-function showMessage(message) {
-  state.statusMessage = message;
+function payAbilityCost(player, card, ability) {
+  const cost = getDiscountedCost(player, card, ability);
+
+  if (!hasResources(player, cost)) {
+    return false;
+  }
+
+  player.mana -= cost.mana || 0;
+  player.madness -= cost.madness || 0;
+  player.life -= cost.blood || 0;
+
+  if (ability.cost && ability.cost.mana && cost.mana < ability.cost.mana) {
+    player.discountsUsed[card.element] = true;
+  }
+
+  return true;
+}
+
+function hasResources(player, cost) {
+  return (
+    player.mana >= (cost.mana || 0) &&
+    player.madness >= (cost.madness || 0) &&
+    player.life > (cost.blood || 0)
+  );
+}
+
+function formatCost(cost) {
+  const parts = [];
+  if (cost.mana) {
+    parts.push(`${cost.mana} Mana`);
+  }
+  if (cost.madness) {
+    parts.push(`${cost.madness} Loucura`);
+  }
+  if (cost.blood) {
+    parts.push(`${cost.blood} Sangue`);
+  }
+  return parts.join(" · ") || "0";
+}
+
+function attack(attackerRef, defenderRef) {
+  const attackerLocation = getPactLocation(attackerRef.cardId);
+
+  if (!attackerLocation) {
+    return;
+  }
+
+  const attacker = attackerLocation.card;
+  const owner = state.players[attacker.ownerIndex];
+
+  if (!canAttack(attacker)) {
+    showMessage(`${attacker.name} não pode atacar agora.`);
+    return;
+  }
+
+  const opponent = getOpponent(owner.index);
+  const tauntTarget = getTauntTarget(opponent);
+  if (tauntTarget && defenderRef.cardId !== tauntTarget.id) {
+    showMessage(`Provocação obriga o ataque contra ${tauntTarget.name}.`);
+    return;
+  }
+
+  attacker.hasAttacked = true;
+
+  if (defenderRef.type === "hero") {
+    const defender = state.players[defenderRef.playerIndex];
+    damageHero(defender, getAttack(attacker), attacker);
+    logAction(`${attacker.name} atacou ${defender.heroName}.`);
+  } else {
+    const defenderLocation = getPactLocation(defenderRef.cardId);
+    if (!defenderLocation) {
+      return;
+    }
+
+    const defender = defenderLocation.card;
+    const defenderAttack = getAttack(defender);
+    damagePact(defender, getAttack(attacker), attacker);
+
+    if (getPactLocation(defender.id) && defenderAttack > 0) {
+      damagePact(attacker, defenderAttack, defender);
+    }
+
+    logAction(`${attacker.name} atacou ${defender.name}.`);
+  }
+
+  state.selectedAttackerId = null;
+  checkGameOver();
   updateUI();
 }
 
-function handleClick(event) {
-  const screenButton = event.target.closest("[data-screen]");
+function canAttack(card) {
+  const location = card ? getPactLocation(card.id) : null;
 
-  if (screenButton) {
-    state.screen = screenButton.dataset.screen;
+  return Boolean(
+    card &&
+    location &&
+    location.slot === ACTIVE_SLOT &&
+    card.ownerIndex === state.activePlayerIndex &&
+    !card.hasAttacked &&
+    !state.pendingTarget &&
+    !isFrozen(card) &&
+    !state.gameOver &&
+    (state.players[state.activePlayerIndex].role === "human" || state.botThinking)
+  );
+}
+
+function canHeroReceiveAttack(player) {
+  return Boolean(
+    state.selectedAttackerId &&
+    player.index !== state.activePlayerIndex &&
+    !getTauntTarget(player)
+  );
+}
+
+function canHeroBeDirectTarget(player) {
+  return canHeroReceiveAttack(player);
+}
+
+function canHumanSwap(player, slot) {
+  return Boolean(
+    canHumanAct() &&
+    player.index === 0 &&
+    slot !== ACTIVE_SLOT &&
+    !player.swappedThisTurn &&
+    player.pacts[slot] &&
+    !state.pendingTarget
+  );
+}
+
+function swapPact(player, slot) {
+  if (!canHumanSwap(player, slot)) {
+    showMessage("Você já trocou de Pacto neste turno ou esse slot está vazio.");
+    return;
+  }
+
+  [player.pacts[ACTIVE_SLOT], player.pacts[slot]] = [player.pacts[slot], player.pacts[ACTIVE_SLOT]];
+  refreshPactSlots(player);
+  player.swappedThisTurn = true;
+  state.swapFlash = { playerIndex: player.index, slot };
+  state.activeGlow = { playerIndex: player.index, slot: ACTIVE_SLOT };
+  logAction(`${player.heroName} trocou o Pacto Ativo.`);
+  showMessage(`${player.pacts[ACTIVE_SLOT].name} é o novo Pacto Ativo.`);
+  window.setTimeout(() => {
+    state.swapFlash = null;
+    state.activeGlow = null;
     updateUI();
-    return;
+  }, 900);
+  updateUI();
+}
+
+function botSwapIfUseful(bot) {
+  if (bot.swappedThisTurn) {
+    return false;
   }
 
-  const heroChoice = event.target.closest("[data-select-hero]");
+  const active = bot.pacts[ACTIVE_SLOT];
+  const candidates = [0, 2].filter((slot) => bot.pacts[slot]);
 
-  if (heroChoice) {
-    selectHero(heroChoice.dataset.selectHero);
-    return;
+  if (candidates.length === 0) {
+    return false;
   }
 
-  const handCard = event.target.closest("[data-hand-index]");
+  let chosenSlot = -1;
 
-  if (handCard) {
-    playCard(Number(handCard.dataset.handIndex));
-    return;
+  if (!active) {
+    chosenSlot = candidates.sort((a, b) => getAttack(bot.pacts[b]) - getAttack(bot.pacts[a]))[0];
+  } else if (active.currentHealth <= 3) {
+    chosenSlot = candidates.sort((a, b) => bot.pacts[b].currentHealth - bot.pacts[a].currentHealth)[0];
   }
 
-  const fieldCard = event.target.closest("[data-field-index][data-field-slot]");
-
-  if (fieldCard) {
-    handleFieldClick(Number(fieldCard.dataset.fieldIndex), Number(fieldCard.dataset.fieldSlot));
-    return;
+  if (chosenSlot === -1) {
+    return false;
   }
 
-  const hero = event.target.closest("[data-hero-index]");
-
-  if (hero) {
-    handleHeroClick(Number(hero.dataset.heroIndex));
-    return;
-  }
-
-  const primordial = event.target.closest("[data-primordial-index]");
-
-  if (primordial) {
-    handlePrimordialClick(Number(primordial.dataset.primordialIndex));
-  }
+  [bot.pacts[ACTIVE_SLOT], bot.pacts[chosenSlot]] = [bot.pacts[chosenSlot], bot.pacts[ACTIVE_SLOT]];
+  refreshPactSlots(bot);
+  bot.swappedThisTurn = true;
+  logAction(`${bot.heroName} trocou o Pacto Ativo.`);
+  return true;
 }
 
 function handleFieldClick(playerIndex, slot) {
-  if (!state.players.length) {
-    return;
-  }
-
   const player = state.players[playerIndex];
-  const card = player.field[slot];
+  const card = player ? player.pacts[slot] : null;
 
   if (!card) {
     return;
@@ -2654,6 +1620,11 @@ function handleFieldClick(playerIndex, slot) {
   }
 
   if (playerIndex === 0) {
+    if (slot !== ACTIVE_SLOT) {
+      showMessage("Somente o Pacto do meio pode atacar. Pactos no banco usam habilidades.");
+      return;
+    }
+
     if (!canAttack(card)) {
       showMessage(`${card.name} não pode atacar agora.`);
       return;
@@ -2666,7 +1637,7 @@ function handleFieldClick(playerIndex, slot) {
   }
 
   if (!state.selectedAttackerId) {
-    showMessage("Selecione um Pacto aliado para atacar primeiro.");
+    showMessage("Selecione seu Pacto Ativo para atacar.");
     return;
   }
 
@@ -2674,12 +1645,23 @@ function handleFieldClick(playerIndex, slot) {
 }
 
 function handleHeroClick(playerIndex) {
-  if (!canHumanAct() || state.pendingTarget || !state.selectedAttackerId) {
+  const player = state.players[playerIndex];
+
+  if (!player) {
     return;
   }
 
-  if (playerIndex === 0) {
-    showMessage("Escolha o Herói inimigo como alvo.");
+  if (state.pendingTarget) {
+    resolvePendingTarget({ type: "hero", playerIndex, player });
+    return;
+  }
+
+  if (!canHumanAct() || !state.selectedAttackerId || playerIndex === 0) {
+    return;
+  }
+
+  if (!canHeroBeDirectTarget(player)) {
+    showMessage("Há uma Provocação impedindo esse ataque.");
     return;
   }
 
@@ -2687,56 +1669,983 @@ function handleHeroClick(playerIndex) {
 }
 
 function handlePrimordialClick(playerIndex) {
-  if (!canHumanAct() || playerIndex !== 0) {
+  const player = state.players[playerIndex];
+
+  if (!player) {
     return;
   }
 
   if (state.pendingTarget) {
-    showMessage("Escolha o alvo destacado antes de invocar o Primordial.");
+    return;
+  }
+
+  if (!canHumanAct() || playerIndex !== 0) {
+    return;
+  }
+
+  if (!canInvokePrimordial(player)) {
+    showMessage(getPrimordialState(player).label);
+    return;
+  }
+
+  invokePrimordial(player);
+}
+
+function invokePrimordial(player, target = null) {
+  if (!canInvokePrimordial(player)) {
+    return false;
+  }
+
+  if (player.primordial.key === "tronoAbissal" && !target && hasValidTargets(player, "enemyPact")) {
+    requestTarget({
+      message: "Escolha um Pacto inimigo para congelar.",
+      validTarget: (candidate) => isValidTargetForRule(player, "enemyPact", candidate),
+      resolve: (candidate) => invokePrimordial(player, candidate)
+    });
+    return true;
+  }
+
+  player.mana -= player.primordial.cost;
+  player.primordialInvoked = true;
+  player.primordial.currentHealth = getMaxHealth(player.primordial);
+  logAction(`${player.heroName} invocou ${player.primordial.name}.`);
+  flashTurnSplash("Primordial Invocado");
+
+  if (player.primordial.key === "reiChamas") {
+    damageAllEnemyPacts(player, 3, player.primordial);
+  }
+
+  if (player.primordial.key === "tronoAbissal" && target && target.card) {
+    freezePact(target.card);
+  }
+
+  clampAllPacts();
+  checkGameOver();
+  updateUI();
+  return true;
+}
+
+function usePrimordialAbility(playerIndex) {
+  if (!canHumanAct()) {
     return;
   }
 
   const player = state.players[playerIndex];
-  summonPact(player, player.primordial, { primordial: true });
+  const ability = player ? getPlayablePrimordialAbility(player.primordial) : null;
+
+  if (!player || player.index !== 0 || !player.primordialInvoked || !ability) {
+    return;
+  }
+
+  if (player.primordial.primordialAbilityUsedTurn === player.turnsTaken) {
+    showMessage("O Primordial já usou sua habilidade neste turno.");
+    return;
+  }
+
+  if (ability.target && hasValidTargets(player, ability.target)) {
+    requestTarget({
+      message: `Escolha o alvo para ${ability.name}.`,
+      validTarget: (target) => isValidTargetForRule(player, ability.target, target),
+      resolve: (target) => resolvePrimordialAbility(player, ability, target)
+    });
+    return;
+  }
+
+  resolvePrimordialAbility(player, ability, null);
+}
+
+function resolvePrimordialAbility(player, ability, target) {
+  player.primordial.primordialAbilityUsedTurn = player.turnsTaken;
+  logAction(`${player.primordial.name} usou ${ability.name}.`);
+
+  if (ability.action === "primordialDamage2") {
+    dealDamageToTarget(target, 2, player.primordial);
+  }
+
+  if (ability.action === "primordialHealHero2") {
+    healHero(player, 2);
+  }
+
+  checkGameOver();
+  updateUI();
+}
+
+function getPlayablePrimordialAbility(primordial) {
+  return primordial.abilities.find((ability) => ability.action) || null;
+}
+
+function canInvokePrimordial(player) {
+  return Boolean(
+    player &&
+    !player.primordialInvoked &&
+    !player.primordialDestroyed &&
+    player.mana >= player.primordial.cost
+  );
+}
+
+function getPrimordialState(player) {
+  if (player.primordialDestroyed) {
+    return { label: "Destruído", className: "spent" };
+  }
+
+  if (player.primordialInvoked) {
+    return { label: "Invocado", className: "invoked" };
+  }
+
+  if (player.mana >= player.primordial.cost) {
+    return { label: "Disponível", className: "available" };
+  }
+
+  return { label: `Bloqueado ${player.mana}/${player.primordial.cost} Mana`, className: "locked" };
+}
+
+function requestTarget(config) {
+  state.pendingTarget = config;
+  state.selectedAttackerId = null;
+  showMessage(config.message);
+}
+
+function resolvePendingTarget(target) {
+  if (!state.pendingTarget) {
+    return;
+  }
+
+  const pending = state.pendingTarget;
+
+  if (!pending.validTarget(target)) {
+    showMessage("Esse alvo não é válido.");
+    return;
+  }
+
+  state.pendingTarget = null;
+  pending.resolve(target);
+}
+
+function isTargetable(target) {
+  return Boolean(state.pendingTarget && state.pendingTarget.validTarget(target));
+}
+
+function hasValidTargets(player, rule) {
+  return getAllTargets().some((target) => isValidTargetForRule(player, rule, target));
+}
+
+function isValidTargetForRule(player, rule, target) {
+  const opponent = getOpponent(player.index);
+
+  switch (rule) {
+    case "enemyAny":
+      return target.playerIndex === opponent.index && (target.type === "pact" || target.type === "hero");
+    case "enemyPact":
+    case "enemyPactOptional":
+      return target.playerIndex === opponent.index && target.type === "pact" && Boolean(target.card);
+    case "allyPact":
+    case "allyPactOptional":
+      return target.playerIndex === player.index && target.type === "pact" && Boolean(target.card);
+    default:
+      return false;
+  }
+}
+
+function getAllTargets() {
+  const targets = [];
+
+  state.players.forEach((player) => {
+    targets.push({ type: "hero", playerIndex: player.index, player });
+    player.pacts.forEach((card, slot) => {
+      if (card) {
+        targets.push({ type: "pact", playerIndex: player.index, slot, card });
+      }
+    });
+  });
+
+  return targets;
+}
+
+function dealDamageToTarget(target, amount, source) {
+  if (!target) {
+    return;
+  }
+
+  if (target.type === "hero") {
+    damageHero(state.players[target.playerIndex], amount, source);
+  }
+
+  if (target.type === "pact") {
+    damagePact(target.card, amount, source);
+  }
+}
+
+function damageAllEnemyPacts(player, amount, source) {
+  const opponent = getOpponent(player.index);
+  const targetIds = opponent.pacts.filter(Boolean).map((card) => card.id);
+
+  targetIds.forEach((cardId) => {
+    const location = getPactLocation(cardId);
+    if (location) {
+      damagePact(location.card, amount, source);
+    }
+  });
+}
+
+function damagePact(card, amount, source) {
+  const location = getPactLocation(card.id);
+  if (!location) {
+    return 0;
+  }
+
+  const reduction = card.key === "varkhan" || card.key === "lysora" ? 1 : 0;
+  const finalDamage = Math.max(0, amount - reduction);
+  card.currentHealth -= finalDamage;
+  logAction(`${card.name} recebeu ${finalDamage} de dano${reduction ? " após redução" : ""}.`);
+
+  if (card.currentHealth <= 0) {
+    destroyPact(card, source);
+  }
+
+  return finalDamage;
+}
+
+function destroyPact(card, source, options = {}) {
+  const location = getPactLocation(card.id);
+  if (!location) {
+    return;
+  }
+
+  const owner = state.players[location.playerIndex];
+  owner.pacts[location.slot] = null;
+  owner.destroyedPacts += 1;
+  logAction(`${card.name} foi destruído.`);
+
+  const sourceOwner = source && typeof source.ownerIndex === "number" ? state.players[source.ownerIndex] : null;
+
+  if (!options.sacrifice && sourceOwner && sourceOwner.index !== owner.index && source && source.type === "pact" && source.element === "fire") {
+    source.permanentAttack += 1;
+    logAction(`${source.name} recebeu +1 Ataque permanente pela Chama do Conquistador.`);
+  }
+
+  if (!options.sacrifice && sourceOwner && sourceOwner.realm && sourceOwner.realm.key === "fornalhaEterna" && source && source.type === "pact" && source.element === "fire") {
+    sourceOwner.mana = Math.min(sourceOwner.manaMax, sourceOwner.mana + 1);
+    logAction("Fornalha Eterna recuperou 1 Mana.");
+  }
+
+  if (source && source.type === "primordial" && source.key === "reiChamas" && sourceOwner && sourceOwner.index !== owner.index) {
+    source.permanentAttack += 1;
+    logAction(`${source.name} recebeu +1 Ataque permanente.`);
+  }
+
+  checkGameOver();
+}
+
+function healPact(card, amount, healer) {
+  const location = getPactLocation(card.id);
+  if (!location) {
+    return 0;
+  }
+
+  const maxHealth = getMaxHealth(card);
+  const before = card.currentHealth;
+  card.currentHealth = Math.min(maxHealth, card.currentHealth + amount);
+  const healed = card.currentHealth - before;
+
+  if (healed > 0) {
+    logAction(`${card.name} curou ${healed} de Vida.`);
+    handleAllyHealed(state.players[location.playerIndex], healer);
+  }
+
+  return healed;
+}
+
+function handleAllyHealed(owner, healer) {
+  if (owner.element === "water" && !owner.healedAllyThisTurn) {
+    owner.healedAllyThisTurn = true;
+    healHero(owner, 1);
+    logAction("Marés Eternas curou 1 de Vida do Herói.");
+  }
+
+  if (owner.realm && owner.realm.key === "mareProfunda" && !owner.realmHealDrawnThisTurn) {
+    owner.realmHealDrawnThisTurn = true;
+    drawCard(owner, 1);
+    logAction("Maré Profunda comprou 1 carta pela cura.");
+  }
+}
+
+function healHero(player, amount) {
+  const before = player.life;
+  player.life = Math.min(player.maxLife, player.life + amount);
+  const healed = player.life - before;
+  if (healed > 0) {
+    logAction(`${player.heroName} curou ${healed} de Vida.`);
+  }
+  return healed;
+}
+
+function damageHero(player, amount, source) {
+  player.life = Math.max(0, player.life - amount);
+  logAction(`${player.heroName} recebeu ${amount} de dano.`);
+  checkGameOver();
+}
+
+function freezePact(card) {
+  const location = getPactLocation(card.id);
+  if (!location) {
+    return;
+  }
+  const owner = state.players[location.playerIndex];
+  card.frozenUntilTurn = owner.turnsTaken + 1;
+  logAction(`${card.name} foi congelado até o próximo turno.`);
+}
+
+function addTemporaryAttack(card, amount) {
+  card.temporaryAttack += amount;
+  logAction(`${card.name} recebeu +${amount} Ataque neste turno.`);
+}
+
+function addTemporaryHealth(card, amount) {
+  card.temporaryHealth += amount;
+  card.currentHealth += amount;
+  logAction(`${card.name} recebeu +${amount} Vida temporária.`);
+}
+
+function getAttack(card) {
+  if (!card) {
+    return 0;
+  }
+
+  const owner = state.players[card.ownerIndex];
+  const opponent = owner ? getOpponent(owner.index) : null;
+  const location = card.type === "pact" ? getPactLocation(card.id) : null;
+  let attack = card.baseAttack + card.permanentAttack + card.temporaryAttack;
+
+  if (card.type === "pact" && location && location.slot === ACTIVE_SLOT && (card.key === "cinzamor" || card.key === "thalora")) {
+    attack += 1;
+  }
+
+  if (card.type === "pact" && location && location.slot === ACTIVE_SLOT && owner && owner.pacts.some((ally) => ally && (ally.key === "ignivar" || ally.key === "nauren"))) {
+    attack += 1;
+  }
+
+  if (owner && owner.realm && owner.realm.key === "fornalhaEterna" && card.element === "fire") {
+    attack += 1;
+  }
+
+  if (opponent && opponent.realm && opponent.realm.key === "abismoSilencioso" && card.type === "pact") {
+    attack -= 1;
+  }
+
+  return Math.max(0, attack);
+}
+
+function getMaxHealth(card) {
+  if (!card) {
+    return 0;
+  }
+
+  const owner = state.players[card.ownerIndex];
+  let health = getBaseCardHealth(card) + card.permanentHealth + card.temporaryHealth;
+
+  if (owner && owner.realm && owner.realm.key === "tronoVulcanico" && card.element === "fire") {
+    health += 2;
+  }
+
+  if (owner && owner.realm && owner.realm.key === "mareProfunda" && card.element === "water") {
+    health += 2;
+  }
+
+  if (owner && owner.primordialInvoked && owner.primordial.key === "tronoAbissal" && card.type === "pact" && card.element === "water") {
+    health += 2;
+  }
+
+  return Math.max(1, health);
+}
+
+function getBaseCardHealth(card) {
+  return card.baseHealth || CARD_DEFS[card.key].health || 1;
+}
+
+function clampPacts(player) {
+  player.pacts.forEach((card) => {
+    if (card) {
+      card.currentHealth = Math.min(card.currentHealth, getMaxHealth(card));
+    }
+  });
+}
+
+function clampAllPacts() {
+  state.players.forEach(clampPacts);
+}
+
+function isFrozen(card) {
+  const owner = state.players[card.ownerIndex];
+  return Boolean(card.frozenUntilTurn && owner && owner.turnsTaken <= card.frozenUntilTurn);
+}
+
+function isAbilityBlocked(card) {
+  const owner = state.players[card.ownerIndex];
+  return Boolean(card.abilitiesBlockedUntilTurn && owner && owner.turnsTaken <= card.abilitiesBlockedUntilTurn);
+}
+
+function isTaunting(card) {
+  const owner = state.players[card.ownerIndex];
+  return Boolean(card.tauntExpiresTurn && owner && owner.turnsTaken < card.tauntExpiresTurn);
+}
+
+function getTauntTarget(player) {
+  return player.pacts.find((card) => card && isTaunting(card)) || null;
+}
+
+function getPactLocation(cardId) {
+  for (const player of state.players) {
+    const slot = player.pacts.findIndex((card) => card && card.id === cardId);
+    if (slot !== -1) {
+      return { playerIndex: player.index, slot, card: player.pacts[slot] };
+    }
+  }
+  return null;
+}
+
+function refreshPactSlots(player) {
+  player.pacts.forEach((card, slot) => {
+    if (card) {
+      card.slot = slot;
+    }
+  });
+}
+
+function getOpponent(playerIndex) {
+  return state.players.find((player) => player.index !== playerIndex);
+}
+
+function canHumanAct() {
+  return Boolean(
+    state.players.length > 0 &&
+    !state.gameOver &&
+    !state.botThinking &&
+    state.activePlayerIndex === 0 &&
+    state.players[0].role === "human"
+  );
+}
+
+function endTurn() {
+  if (!canHumanAct() || state.pendingTarget) {
+    return;
+  }
+
+  const player = state.players[state.activePlayerIndex];
+  expireEndOfTurnEffects(player);
+  state.selectedAttackerId = null;
+  logAction(`${player.heroName} encerrou o turno.`);
+  beginTurn(getOpponent(player.index).index);
+}
+
+async function botTurn(battleId = state.battleId) {
+  const bot = state.players[state.activePlayerIndex];
+
+  if (!bot || bot.role !== "bot" || state.gameOver) {
+    return;
+  }
+
+  state.botThinking = true;
+  updateUI();
+  await sleep(BOT_DELAY);
+
+  if (!isSameBotTurn(bot, battleId)) {
+    state.botThinking = false;
+    return;
+  }
+
+  botSwapIfUseful(bot);
+  await sleep(260);
+  playBotCards(bot);
+  await sleep(260);
+  useBotBenchAbility(bot);
+  await sleep(260);
+
+  if (canInvokePrimordial(bot)) {
+    const target = chooseTargetForRule(bot, "enemyPact");
+    invokePrimordial(bot, target);
+    await sleep(260);
+  }
+
+  const primordialAbility = getPlayablePrimordialAbility(bot.primordial);
+  if (bot.primordialInvoked && primordialAbility && bot.primordial.primordialAbilityUsedTurn !== bot.turnsTaken) {
+    const target = primordialAbility.target ? chooseTargetForRule(bot, primordialAbility.target) : null;
+    resolvePrimordialAbility(bot, primordialAbility, target);
+    await sleep(260);
+  }
+
+  const attacker = bot.pacts[ACTIVE_SLOT];
+  if (attacker && canAttack(attacker)) {
+    const target = chooseBotAttackTarget(bot, attacker);
+    if (target) {
+      attack({ cardId: attacker.id }, target);
+      await sleep(260);
+    }
+  }
+
+  state.botThinking = false;
+
+  if (!state.gameOver && isSameBotTurn(bot, battleId)) {
+    expireEndOfTurnEffects(bot);
+    logAction(`${bot.heroName} encerrou o turno.`);
+    beginTurn(0);
+  }
+}
+
+function playBotCards(bot) {
+  let played = true;
+  let guard = 0;
+
+  while (played && guard < 4) {
+    guard += 1;
+    played = false;
+
+    const index = chooseBotCard(bot);
+    if (index === -1) {
+      continue;
+    }
+
+    const card = bot.hand[index];
+    const targetRule = getCardTargetRule(card);
+    const target = targetRule ? chooseTargetForRule(bot, targetRule) : null;
+
+    if (targetRule && !target && !targetRule.endsWith("Optional")) {
+      continue;
+    }
+
+    bot.mana -= card.cost;
+    bot.hand.splice(index, 1);
+    bot.discard.push(card);
+    logAction(`${bot.heroName} jogou ${card.name}.`);
+    resolvePlayedCard(bot, card, target);
+    played = true;
+  }
+}
+
+function chooseBotCard(bot) {
+  let bestIndex = -1;
+  let bestScore = -1;
+
+  bot.hand.forEach((card, index) => {
+    if (card.cost > bot.mana) {
+      return;
+    }
+
+    const targetRule = getCardTargetRule(card);
+    const target = targetRule ? chooseTargetForRule(bot, targetRule) : null;
+    if (targetRule && !target && !targetRule.endsWith("Optional")) {
+      return;
+    }
+
+    const score = getBotCardScore(bot, card, target);
+    if (score > bestScore) {
+      bestIndex = index;
+      bestScore = score;
+    }
+  });
+
+  return bestIndex;
+}
+
+function getBotCardScore(bot, card, target) {
+  const opponent = getOpponent(bot.index);
+  const enemyLow = opponent.pacts.some((pact) => pact && pact.currentHealth <= 3);
+
+  const scores = {
+    realm: bot.realm ? 24 : 60,
+    spell: 38,
+    equipment: 34,
+    event: 30
+  };
+
+  let score = scores[card.type] || 0;
+  if (card.action && card.action.includes("Damage") && enemyLow) {
+    score += 24;
+  }
+  if (target && target.card) {
+    score += getAttack(target.card) + Math.max(0, getMaxHealth(target.card) - target.card.currentHealth);
+  }
+  return score - card.cost;
+}
+
+function useBotBenchAbility(bot) {
+  const bench = [0, 2].map((slot) => bot.pacts[slot]).filter(Boolean);
+
+  for (const card of bench) {
+    const ability = chooseBotAbility(bot, card);
+    if (!ability) {
+      continue;
+    }
+    const target = ability.target ? chooseTargetForRule(bot, ability.target) : null;
+    if (ability.target && !target) {
+      continue;
+    }
+    resolvePactAbility(bot, card, ability, target);
+    return true;
+  }
+
+  return false;
+}
+
+function chooseBotAbility(bot, card) {
+  return card.abilities.find((ability) => {
+    const location = getPactLocation(card.id);
+    return (
+      location &&
+      location.slot !== ACTIVE_SLOT &&
+      card.abilityUsedTurn !== bot.turnsTaken &&
+      !isAbilityBlocked(card) &&
+      hasResources(bot, getDiscountedCost(bot, card, ability))
+    );
+  }) || null;
+}
+
+function chooseBotAttackTarget(bot, attacker) {
+  const opponent = getOpponent(bot.index);
+  const taunt = getTauntTarget(opponent);
+  if (taunt) {
+    return { type: "pact", cardId: taunt.id };
+  }
+
+  const enemies = opponent.pacts.filter(Boolean);
+  if (enemies.length === 0 || opponent.life <= getAttack(attacker)) {
+    return { type: "hero", playerIndex: opponent.index };
+  }
+
+  const killable = enemies
+    .filter((card) => card.currentHealth <= getAttack(attacker))
+    .sort((a, b) => getAttack(b) - getAttack(a))[0];
+
+  const target = killable || enemies.sort((a, b) => getAttack(b) - getAttack(a))[0];
+  return target ? { type: "pact", cardId: target.id } : { type: "hero", playerIndex: opponent.index };
+}
+
+function chooseTargetForRule(player, rule) {
+  const targets = getAllTargets().filter((target) => isValidTargetForRule(player, rule, target));
+
+  if (targets.length === 0) {
+    return null;
+  }
+
+  if (rule.includes("ally")) {
+    return targets.sort((a, b) => {
+      const aMissing = getMaxHealth(a.card) - a.card.currentHealth;
+      const bMissing = getMaxHealth(b.card) - b.card.currentHealth;
+      return bMissing - aMissing;
+    })[0];
+  }
+
+  if (rule === "enemyAny") {
+    const opponent = getOpponent(player.index);
+    if (opponent.life <= 5) {
+      return { type: "hero", playerIndex: opponent.index, player: opponent };
+    }
+  }
+
+  return targets
+    .filter((target) => target.type === "pact")
+    .sort((a, b) => getAttack(b.card) - getAttack(a.card))[0] || targets[0];
+}
+
+function isSameBotTurn(bot, battleId) {
+  return Boolean(
+    battleId === state.battleId &&
+    !state.gameOver &&
+    state.players[state.activePlayerIndex] &&
+    state.players[state.activePlayerIndex].index === bot.index &&
+    bot.role === "bot"
+  );
+}
+
+function checkGameOver() {
+  if (state.gameOver || state.players.length < 2) {
+    return;
+  }
+
+  const defeated = state.players.find((player) => player.life <= 0 || player.destroyedPacts >= MAX_PACTS);
+
+  if (!defeated) {
+    return;
+  }
+
+  const winner = getOpponent(defeated.index);
+  state.gameOver = true;
+  state.winnerIndex = winner.index;
+  state.screen = "result";
+
+  if (defeated.life <= 0) {
+    state.statusMessage = `${defeated.heroName} ficou sem Vida.`;
+  } else {
+    state.statusMessage = `${defeated.heroName} perdeu seus 3 Pactos.`;
+  }
+
+  logAction(state.statusMessage);
+  updateUI();
+}
+
+function renderResult() {
+  const winner = state.players[state.winnerIndex];
+  const humanWon = winner && winner.role === "human";
+
+  resultTitle.textContent = humanWon ? "Vitória" : "Derrota";
+  resultText.textContent = state.statusMessage || (humanWon ? "Você venceu o duelo." : "O oponente venceu o duelo.");
+}
+
+function logAction(message) {
+  state.log.unshift(message);
+  state.log = state.log.slice(0, 80);
+
+  if (gameLog) {
+    gameLog.innerHTML = state.log.map((entry) => `<p class="log-entry">${escapeHtml(entry)}</p>`).join("");
+  }
+}
+
+function showMessage(message) {
+  state.statusMessage = message;
+  updateUI();
+}
+
+function flashTurnSplash(message) {
+  if (!turnSplash) {
+    return;
+  }
+
+  turnSplash.textContent = message;
+  turnSplash.classList.remove("show");
+  void turnSplash.offsetWidth;
+  turnSplash.classList.add("show");
 }
 
 function toggleBattlePanel(panel) {
-  if (state.floatingPanel === panel) {
-    closeFloatingPanel(panel);
-    return;
-  }
-
-  renderFloatingPanels();
-  state.floatingPanel = panel;
+  state.floatingPanel = state.floatingPanel === panel ? null : panel;
   renderFloatingPanels();
 }
 
-function closeFloatingPanel(panel) {
-  const drawer = panel === "log" ? logDrawer : rulesDrawer;
-  state.floatingPanel = null;
-
-  if (!drawer || drawer.hidden) {
-    renderFloatingPanels();
+function renderFloatingPanels() {
+  if (!logDrawer || !rulesDrawer) {
     return;
   }
 
-  drawer.classList.remove("is-open");
-  drawer.classList.add("is-closing");
+  logDrawer.hidden = state.floatingPanel !== "log";
+  rulesDrawer.hidden = state.floatingPanel !== "rules";
+  logDrawer.classList.toggle("is-open", state.floatingPanel === "log");
+  rulesDrawer.classList.toggle("is-open", state.floatingPanel === "rules");
+  toggleLogButton.classList.toggle("active-toggle", state.floatingPanel === "log");
+  toggleRulesButton.classList.toggle("active-toggle", state.floatingPanel === "rules");
+  toggleLogButton.setAttribute("aria-expanded", String(state.floatingPanel === "log"));
+  toggleRulesButton.setAttribute("aria-expanded", String(state.floatingPanel === "rules"));
+}
 
-  if (toggleLogButton && panel === "log") {
-    toggleLogButton.classList.remove("active-toggle");
-    toggleLogButton.setAttribute("aria-expanded", "false");
+function openCardModal(detail) {
+  if (!modal || !modalBody || !detail) {
+    return;
   }
 
-  if (toggleRulesButton && panel === "rules") {
-    toggleRulesButton.classList.remove("active-toggle");
-    toggleRulesButton.setAttribute("aria-expanded", "false");
+  modalBody.innerHTML = renderModalDetail(detail);
+  modal.hidden = false;
+  modal.classList.add("is-open");
+  document.body.classList.add("modal-open");
+}
+
+function closeCardModal() {
+  if (!modal) {
+    return;
   }
 
-  window.setTimeout(() => {
-    drawer.classList.remove("is-closing");
-    renderFloatingPanels();
-  }, 180);
+  modal.hidden = true;
+  modal.classList.remove("is-open");
+  document.body.classList.remove("modal-open");
+}
+
+function renderModalDetail(card) {
+  const abilities = card.abilities && card.abilities.length ? `
+    <div class="modal-section">
+      <h3>Habilidades</h3>
+      ${card.abilities.map((ability) => `
+        <p><strong>${escapeHtml(ability.name)}</strong>${ability.cost ? ` <span>${escapeHtml(formatCost(ability.cost))}</span>` : ""}<br>${escapeHtml(ability.text || "")}</p>
+      `).join("")}
+    </div>
+  ` : "";
+  const permanent = card.permanent && card.permanent.length ? `
+    <div class="modal-section">
+      <h3>Efeitos Permanentes</h3>
+      ${card.permanent.map((effect) => `<p>${escapeHtml(effect)}</p>`).join("")}
+    </div>
+  ` : "";
+
+  return `
+    <div class="modal-card-art">${renderCardArt(card, "modal-art")}</div>
+    <div class="modal-card-copy">
+      <p class="eyebrow">${escapeHtml(TYPE_LABELS[card.type] || "Carta")} · ${escapeHtml(ELEMENT_LABELS[card.element] || "Neutro")}</p>
+      <h2>${escapeHtml(card.name)}</h2>
+      ${card.title ? `<p class="detail-subtitle">${escapeHtml(card.title)}</p>` : ""}
+      <div class="modal-statline">
+        ${card.cost ? renderIconStat("mana", card.cost, "Custo") : ""}
+        ${card.baseAttack ? renderIconStat("ataque", card.baseAttack, "Ataque") : ""}
+        ${card.baseHealth ? renderIconStat("vida_pacto", card.baseHealth, "Vida") : ""}
+      </div>
+      ${card.passive ? `
+        <div class="modal-section">
+          <h3>${escapeHtml(card.passiveName || "Passiva")}</h3>
+          <p>${escapeHtml(card.passive)}</p>
+        </div>
+      ` : ""}
+      ${permanent}
+      ${card.enter ? `
+        <div class="modal-section">
+          <h3>Ao Entrar</h3>
+          <p>${escapeHtml(card.enter)}</p>
+        </div>
+      ` : ""}
+      ${abilities}
+      ${card.effect ? `
+        <div class="modal-section">
+          <h3>Descrição</h3>
+          <p>${escapeHtml(card.effect)}</p>
+        </div>
+      ` : ""}
+      ${card.exclusive ? `<p class="detail-subtitle">Exclusivo de ${escapeHtml(card.exclusive)}</p>` : ""}
+    </div>
+  `;
+}
+
+function buildDetailFromElement(element) {
+  const type = element.dataset.detailType;
+
+  if (type === "card-key") {
+    return createCard(element.dataset.detailCardKey);
+  }
+
+  if (type === "card") {
+    const card = findCardById(element.dataset.detailCardId);
+    return card ? { ...card } : null;
+  }
+
+  if (type === "hero") {
+    const player = state.players[Number(element.dataset.detailPlayerIndex)];
+    return player ? createHeroCard(player) : null;
+  }
+
+  if (type === "realm") {
+    const player = state.players[Number(element.dataset.detailPlayerIndex)];
+    return player && player.realm ? player.realm : null;
+  }
+
+  if (type === "primordial") {
+    const player = state.players[Number(element.dataset.detailPlayerIndex)];
+    return player ? player.primordial : null;
+  }
+
+  return null;
+}
+
+function findCardById(cardId) {
+  for (const player of state.players) {
+    const fieldCard = player.pacts.find((card) => card && card.id === cardId);
+    if (fieldCard) {
+      return fieldCard;
+    }
+    if (player.primordial && player.primordial.id === cardId) {
+      return player.primordial;
+    }
+    const handCard = player.hand.find((card) => card.id === cardId);
+    if (handCard) {
+      return handCard;
+    }
+  }
+  return null;
+}
+
+function handleDoubleClick(event) {
+  const detailElement = event.target.closest("[data-detail-type]");
+  if (!detailElement) {
+    return;
+  }
+
+  window.clearTimeout(clickTimer);
+  clickTimer = null;
+  event.preventDefault();
+  event.stopPropagation();
+  openCardModal(buildDetailFromElement(detailElement));
+}
+
+function handleClick(event) {
+  if (event.target.closest(".modal-close")) {
+    closeCardModal();
+    return;
+  }
+
+  if (event.target === modal) {
+    closeCardModal();
+    return;
+  }
+
+  if (event.detail > 1) {
+    window.clearTimeout(clickTimer);
+    clickTimer = null;
+    return;
+  }
+
+  const target = event.target;
+  window.clearTimeout(clickTimer);
+  clickTimer = window.setTimeout(() => {
+    processClick(target);
+  }, CLICK_DELAY);
+}
+
+function processClick(target) {
+  const screenButton = target.closest("[data-screen]");
+  if (screenButton) {
+    state.screen = screenButton.dataset.screen;
+    updateUI();
+    return;
+  }
+
+  const heroChoice = target.closest("[data-select-hero]");
+  if (heroChoice) {
+    selectHero(heroChoice.dataset.selectHero);
+    return;
+  }
+
+  const handCard = target.closest("[data-hand-index]");
+  if (handCard) {
+    playCard(Number(handCard.dataset.handIndex));
+    return;
+  }
+
+  const swapButton = target.closest("[data-swap-slot]");
+  if (swapButton) {
+    swapPact(state.players[0], Number(swapButton.dataset.swapSlot));
+    return;
+  }
+
+  const abilityButton = target.closest("[data-ability-card-id]");
+  if (abilityButton) {
+    usePactAbility(abilityButton.dataset.abilityCardId, Number(abilityButton.dataset.abilityIndex));
+    return;
+  }
+
+  const primordialAbility = target.closest("[data-primordial-ability-player-index]");
+  if (primordialAbility && !primordialAbility.classList.contains("disabled")) {
+    usePrimordialAbility(Number(primordialAbility.dataset.primordialAbilityPlayerIndex));
+    return;
+  }
+
+  const fieldCard = target.closest("[data-field-index][data-field-slot]");
+  if (fieldCard) {
+    handleFieldClick(Number(fieldCard.dataset.fieldIndex), Number(fieldCard.dataset.fieldSlot));
+    return;
+  }
+
+  const hero = target.closest("[data-hero-index]");
+  if (hero) {
+    handleHeroClick(Number(hero.dataset.heroIndex));
+    return;
+  }
+
+  const primordial = target.closest("[data-primordial-index]");
+  if (primordial) {
+    handlePrimordialClick(Number(primordial.dataset.primordialIndex));
+  }
 }
 
 function escapeHtml(value) {
@@ -2748,53 +2657,68 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 document.addEventListener("click", handleClick);
-document.addEventListener("mouseover", handleDetailHover);
-document.getElementById("battleScreen").addEventListener("mouseleave", renderEmptyCardDetail);
+document.addEventListener("dblclick", handleDoubleClick);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    if (state.pendingTarget) {
+      state.pendingTarget = null;
+      showMessage("Alvo cancelado.");
+      return;
+    }
+    closeCardModal();
+  }
+});
 
 document.getElementById("startMenuButton").addEventListener("click", () => {
   state.screen = "hero";
   updateUI();
 });
-
 document.getElementById("decksMenuButton").addEventListener("click", () => {
   state.screen = "decks";
   updateUI();
 });
-
 document.getElementById("collectionMenuButton").addEventListener("click", () => {
   state.screen = "collection";
   updateUI();
 });
-
 document.getElementById("settingsMenuButton").addEventListener("click", () => {
   state.screen = "settings";
   updateUI();
 });
-
 document.getElementById("creditsMenuButton").addEventListener("click", () => {
   state.screen = "credits";
   updateUI();
 });
-
 document.getElementById("howToMenuButton").addEventListener("click", () => {
   state.screen = "howto";
   updateUI();
 });
 
-document.getElementById("endTurnButton").addEventListener("click", endTurn);
-document.getElementById("toggleLogButton").addEventListener("click", () => toggleBattlePanel("log"));
-document.getElementById("toggleRulesButton").addEventListener("click", () => toggleBattlePanel("rules"));
+endTurnButton.addEventListener("click", endTurn);
+toggleLogButton.addEventListener("click", () => toggleBattlePanel("log"));
+toggleRulesButton.addEventListener("click", () => toggleBattlePanel("rules"));
 document.getElementById("backToMenuButton").addEventListener("click", startGame);
 document.getElementById("resultRestartButton").addEventListener("click", startBattle);
 document.getElementById("resultMenuButton").addEventListener("click", startGame);
 
+if (modalClose) {
+  modalClose.addEventListener("click", closeCardModal);
+}
+
 if (soundToggleButton) {
-  soundToggleButton.addEventListener("click", toggleAudio);
+  soundToggleButton.addEventListener("click", () => {
+    soundToggleButton.setAttribute("aria-pressed", soundToggleButton.getAttribute("aria-pressed") !== "true");
+    soundToggleButton.textContent = soundToggleButton.getAttribute("aria-pressed") === "true" ? "Som: ligado" : "Som: desligado";
+  });
 }
 
 if (volumeSlider) {
-  volumeSlider.addEventListener("input", (event) => setAudioVolume(event.target.value));
+  volumeSlider.addEventListener("input", () => {});
 }
 
 startGame();
