@@ -66,6 +66,21 @@
       <div id="deckLists" class="deck-lists"></div>
     </section>
 
+    <section id="pactScreen" class="screen content-screen pact-screen" aria-label="Seleção de Pactos">
+      <header class="screen-header">
+        <button type="button" class="ghost-button" data-screen="hero">Voltar</button>
+        <div>
+          <p class="eyebrow">Forme seu pacto</p>
+          <h2>Seleção de Pactos</h2>
+        </div>
+      </header>
+
+      <div class="pact-selection-panel">
+        <div id="pactSelectionContent" class="pact-selection-grid"></div>
+        <button type="button" id="confirmPactsButton" class="primary-action" disabled>Confirmar</button>
+      </div>
+    </section>
+
     <section id="collectionScreen" class="screen content-screen" aria-label="Coleção">
       <header class="screen-header">
         <button type="button" class="ghost-button" data-screen="menu">Voltar</button>
@@ -151,6 +166,7 @@
       <div id="turnSplash" class="turn-splash" aria-hidden="true"></div>
 
       <div class="battle-table">
+        <img id="officialBoardImage" class="official-board-image" src="assets/board/campo.jpeg" alt="">
         <div id="botArea" class="player-board bot-board"></div>
 
         <section class="battle-banner" aria-label="Área de batalha">
@@ -209,6 +225,7 @@
     </div>
   </div>
 
+  <script src="configTabuleiro.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

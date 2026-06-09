@@ -1,6 +1,6 @@
 const ACTIVE_SLOT = 1;
 const MAX_PACTS = 3;
-const STARTING_HAND = 3;
+const STARTING_HAND = 2;
 const DECK_SIZE = 15;
 const MAX_MANA = 10;
 const BOT_DELAY = 520;
@@ -12,7 +12,9 @@ const ICON_ASSETS = {
   loucura: "assets/icons/abismo.jpeg",
   ataque: "assets/icons/ataque.jpeg",
   vida_pacto: "assets/icons/vida_pacto.jpeg",
-  deck: "assets/icons/deck.jpeg"
+  deck: "assets/icons/deck.jpeg",
+  abismo: "assets/icons/abismo.jpeg",
+  dominio: "assets/icons/fragmento_alma.jpeg"
 };
 
 const TYPE_LABELS = {
@@ -36,6 +38,15 @@ const ELEMENT_CLASSES = ["element-fire", "element-water", "element-neutral"];
 
 let nextCardId = 1;
 let clickTimer = null;
+let longPressTimer = null;
+let longPressFired = false;
+
+const CONFIG_TABULEIRO = window.CONFIG_TABULEIRO || {
+  largura: 1600,
+  altura: 900,
+  imagem: "assets/board/campo.jpeg",
+  slots: {}
+};
 
 function withFallbacks(primary, fallbacks = []) {
   return [primary, ...fallbacks].filter(Boolean);
@@ -48,7 +59,7 @@ const CARD_DEFS = {
     type: "pact",
     element: "fire",
     image: "assets/pacts/fire/cinzamor.jpeg",
-    imageFallbacks: ["assets/pacts/fire/cinzamor.png", "cards/fire/cinzamor.jpeg", "cards/fire/cinzamor.png"],
+    imageFallbacks: [],
     health: 12,
     attack: 5,
     passiveName: "Fúria Ardente",
@@ -65,7 +76,7 @@ const CARD_DEFS = {
     type: "pact",
     element: "fire",
     image: "assets/pacts/fire/varkhan.jpeg",
-    imageFallbacks: ["assets/pacts/fire/varkhan.png", "cards/fire/varkhan.jpeg", "cards/fire/varkhan.png"],
+    imageFallbacks: [],
     health: 18,
     attack: 3,
     passiveName: "Couraça Vulcânica",
@@ -82,7 +93,7 @@ const CARD_DEFS = {
     type: "pact",
     element: "fire",
     image: "assets/pacts/fire/ignivar.jpeg",
-    imageFallbacks: ["assets/pacts/fire/ignivar.png", "cards/fire/ignivar.jpeg", "cards/fire/ignivar.png"],
+    imageFallbacks: [],
     health: 14,
     attack: 4,
     passiveName: "Chama Compartilhada",
@@ -99,7 +110,7 @@ const CARD_DEFS = {
     type: "pact",
     element: "water",
     image: "assets/pacts/water/thalora.png",
-    imageFallbacks: ["assets/pacts/water/thalora.jpeg", "cards/water/thalora.png", "cards/water/thalora.jpeg"],
+    imageFallbacks: [],
     health: 11,
     attack: 5,
     passiveName: "Correntes Marinhas",
@@ -116,7 +127,7 @@ const CARD_DEFS = {
     type: "pact",
     element: "water",
     image: "assets/pacts/water/lysora.jpeg",
-    imageFallbacks: ["assets/pacts/water/lysora.png", "cards/water/lysora.jpeg", "cards/water/lysora.png"],
+    imageFallbacks: [],
     health: 18,
     attack: 3,
     passiveName: "Armadura Coralina",
@@ -133,7 +144,7 @@ const CARD_DEFS = {
     type: "pact",
     element: "water",
     image: "assets/pacts/water/nauren.jpeg",
-    imageFallbacks: ["assets/pacts/water/nauren.png", "cards/water/nauren.jpeg", "cards/water/nauren.png"],
+    imageFallbacks: [],
     health: 14,
     attack: 4,
     passiveName: "Canção da Maré",
@@ -151,7 +162,7 @@ const CARD_DEFS = {
     element: "fire",
     cost: 3,
     image: "assets/realms/fornalha_eterna.jpeg",
-    imageFallbacks: ["assets/realms/fornalha_eterna.png", "cards/realms/fornalha_eterna.jpeg", "cards/realms/fornalha_eterna.png"],
+    imageFallbacks: [],
     permanent: [
       "Pactos de Fogo recebem +1 Ataque.",
       "Sempre que um Pacto de Fogo destruir um Pacto inimigo, recupere 1 Mana."
@@ -167,7 +178,7 @@ const CARD_DEFS = {
     element: "fire",
     cost: 3,
     image: "assets/realms/trono_vulcanico.jpeg",
-    imageFallbacks: ["assets/realms/trono_vulcanico.png", "cards/realms/trono_vulcanico.jpeg"],
+    imageFallbacks: [],
     permanent: [
       "A primeira habilidade de Fogo usada a cada turno custa 1 Mana a menos.",
       "Pactos de Fogo recebem +2 Vida."
@@ -184,7 +195,7 @@ const CARD_DEFS = {
     element: "water",
     cost: 3,
     image: "assets/realms/mare_profunda.jpeg",
-    imageFallbacks: ["assets/realms/mare_profunda.png", "cards/realms/mare_profunda.jpeg", "cards/realms/mare_profunda.png"],
+    imageFallbacks: [],
     permanent: [
       "Pactos de Água recebem +2 Vida.",
       "Sempre que você curar um aliado, compre 1 carta. Limite de 1 vez por turno."
@@ -201,7 +212,7 @@ const CARD_DEFS = {
     element: "water",
     cost: 3,
     image: "assets/realms/abismo_silencioso.jpeg",
-    imageFallbacks: ["assets/realms/abismo_silencioso.png", "cards/realms/abismo_silencioso.jpeg"],
+    imageFallbacks: [],
     permanent: [
       "A primeira habilidade de Água usada a cada turno custa 1 Mana a menos.",
       "Pactos inimigos recebem -1 Ataque."
@@ -211,8 +222,8 @@ const CARD_DEFS = {
     action: "realmAbismo",
     target: "enemyPactOptional"
   },
-  reiChamas: {
-    key: "reiChamas",
+  tronoSetimaChama: {
+    key: "tronoSetimaChama",
     name: "O Trono da Sétima Chama",
     type: "primordial",
     element: "fire",
@@ -220,25 +231,25 @@ const CARD_DEFS = {
     attack: 10,
     health: 16,
     exclusive: "Kael Drakar",
-    image: "assets/primordials/o_trono_da_setima_chama.jpeg",
-    imageFallbacks: ["assets/primordials/o_trono_da_setima_chama.png", "cards/primordials/o_trono_da_setima_chama.jpeg", "cards/primordials/rei_das_chamas.png"],
+    image: "assets/primordials/trono_da_setima_chama.jpeg",
+    imageFallbacks: [],
     effect: "Ao ser invocado, cause 3 de dano a todos os Pactos inimigos.",
     abilities: [
       { name: "Chamas Devoradoras", text: "Sempre que destruir um Pacto inimigo, recebe +1 Ataque permanentemente." },
       { name: "Julgamento Ardente", text: "Uma vez por turno, cause 2 de dano a qualquer alvo.", action: "primordialDamage2", target: "enemyAny" }
     ]
   },
-  tronoAbissal: {
-    key: "tronoAbissal",
-    name: "O Trono Abissal",
+  coracaoAbismo: {
+    key: "coracaoAbismo",
+    name: "O Coração do Abismo Infinito",
     type: "primordial",
     element: "water",
     cost: 10,
     attack: 8,
     health: 20,
     exclusive: "Nereia Val'Kora",
-    image: "assets/primordials/o_trono_abissal.jpeg",
-    imageFallbacks: ["assets/primordials/o_trono_abissal.png", "cards/primordials/o_trono_abissal.jpeg", "cards/primordials/mae_das_profundezas.png"],
+    image: "assets/primordials/o_coracao_do_abismo_infinito.jpeg",
+    imageFallbacks: [],
     effect: "Ao ser invocado, congele um Pacto inimigo até o próximo turno.",
     abilities: [
       { name: "Marés Eternas", text: "Enquanto permanecer em campo, Pactos de Água aliados recebem +2 Vida." },
@@ -252,7 +263,7 @@ const CARD_DEFS = {
     element: "fire",
     cost: 2,
     image: "assets/spells/fire/chuva_de_brasas.png",
-    imageFallbacks: ["assets/spells/fire/chuva_de_brasas.jpeg", "cards/spells/fire/chuva_de_brasas.png"],
+    imageFallbacks: [],
     effect: "Cause 2 de dano a um alvo inimigo.",
     action: "spellDamage2",
     target: "enemyAny"
@@ -264,7 +275,7 @@ const CARD_DEFS = {
     element: "fire",
     cost: 3,
     image: "assets/spells/fire/furia_vulcanica.png",
-    imageFallbacks: ["assets/spells/fire/furia_vulcanica.jpeg", "cards/spells/fire/furia_vulcanica.png"],
+    imageFallbacks: [],
     effect: "Um Pacto aliado recebe +3 Ataque neste turno.",
     action: "spellAllyAttack3",
     target: "allyPact"
@@ -276,7 +287,7 @@ const CARD_DEFS = {
     element: "fire",
     cost: 4,
     image: "assets/spells/fire/ritual_da_setima_chama.png",
-    imageFallbacks: ["assets/spells/fire/ritual_da_setima_chama.jpeg", "cards/spells/fire/ritual_da_setima_chama.png"],
+    imageFallbacks: [],
     effect: "Compre 2 cartas e ganhe 1 Loucura.",
     action: "draw2Madness1"
   },
@@ -287,7 +298,7 @@ const CARD_DEFS = {
     element: "fire",
     cost: 4,
     image: "assets/spells/fire/fornalha_insaciavel.png",
-    imageFallbacks: ["assets/spells/fire/fornalha_insaciavel.jpeg", "cards/spells/fire/fornalha_insaciavel.png"],
+    imageFallbacks: [],
     effect: "Destrua um Pacto aliado. Receba 3 Mana.",
     action: "destroyAllyGainMana3",
     target: "allyPact"
@@ -299,7 +310,7 @@ const CARD_DEFS = {
     element: "fire",
     cost: 6,
     image: "assets/spells/fire/apocalipse_carmesim.png",
-    imageFallbacks: ["assets/spells/fire/apocalipse_carmesim.jpeg", "cards/spells/fire/apocalipse_carmesim.png"],
+    imageFallbacks: [],
     effect: "Cause 3 de dano a todos os Pactos inimigos.",
     action: "enemyPactsDamage3"
   },
@@ -310,7 +321,7 @@ const CARD_DEFS = {
     element: "water",
     cost: 2,
     image: "assets/spells/water/mare_restauradora.png",
-    imageFallbacks: ["assets/spells/water/mare_restauradora.jpeg", "cards/spells/water/mare_restauradora.png"],
+    imageFallbacks: [],
     effect: "Cure 3 de Vida de um Pacto aliado.",
     action: "spellHeal3",
     target: "allyPact"
@@ -322,7 +333,7 @@ const CARD_DEFS = {
     element: "water",
     cost: 3,
     image: "assets/spells/water/corrente_de_retorno.png",
-    imageFallbacks: ["assets/spells/water/corrente_de_retorno.jpeg", "cards/spells/water/corrente_de_retorno.png"],
+    imageFallbacks: [],
     effect: "Congele um Pacto inimigo até o próximo turno do controlador.",
     action: "freezeEnemy",
     target: "enemyPact"
@@ -334,7 +345,7 @@ const CARD_DEFS = {
     element: "water",
     cost: 3,
     image: "assets/spells/water/cancao_abissal.png",
-    imageFallbacks: ["assets/spells/water/cancao_abissal.jpeg", "cards/spells/water/cancao_abissal.png"],
+    imageFallbacks: [],
     effect: "Compre 2 cartas.",
     action: "draw2"
   },
@@ -345,7 +356,7 @@ const CARD_DEFS = {
     element: "water",
     cost: 4,
     image: "assets/spells/water/escudo_das_mares.png",
-    imageFallbacks: ["assets/spells/water/escudo_das_mares.jpeg", "cards/spells/water/escudo_das_mares.png"],
+    imageFallbacks: [],
     effect: "Um Pacto aliado recebe +3 Vida temporária.",
     action: "spellTempHealth3",
     target: "allyPact"
@@ -357,7 +368,7 @@ const CARD_DEFS = {
     element: "water",
     cost: 6,
     image: "assets/spells/water/julgamento_do_leviata.png",
-    imageFallbacks: ["assets/spells/water/julgamento_do_leviata.jpeg", "cards/spells/water/julgamento_do_leviata.png"],
+    imageFallbacks: [],
     effect: "Cause 4 de dano a um alvo inimigo.",
     action: "spellDamage4",
     target: "enemyAny"
@@ -412,11 +423,11 @@ const HEROES = {
     style: "Agressão, dano e sacrifício",
     maxLife: 25,
     image: "assets/heroes/kael.jpeg",
-    imageFallbacks: ["assets/heroes/kael.png", "cards/heroes/kael.jpeg", "cards/heroes/Kael.png"],
+    imageFallbacks: [],
     passiveName: "Chama do Conquistador",
     passive: "Sempre que um Pacto de Fogo aliado destruir um Pacto inimigo, ele recebe +1 Ataque permanentemente.",
     pacts: ["cinzamor", "varkhan", "ignivar"],
-    primordial: "reiChamas"
+    primordial: "tronoSetimaChama"
   },
   water: {
     key: "nereia",
@@ -427,11 +438,11 @@ const HEROES = {
     style: "Cura, controle e resistência",
     maxLife: 25,
     image: "assets/heroes/nereia.jpeg",
-    imageFallbacks: ["assets/heroes/nereia.png", "cards/heroes/nereia.jpeg", "cards/heroes/nereia.png"],
+    imageFallbacks: [],
     passiveName: "Marés Eternas",
     passive: "A primeira vez que você curar um aliado a cada turno, cure também 1 de Vida do seu Herói.",
     pacts: ["thalora", "lysora", "nauren"],
-    primordial: "tronoAbissal"
+    primordial: "coracaoAbismo"
   }
 };
 
@@ -463,6 +474,9 @@ const DECK_RECIPES = {
 const state = {
   screen: "menu",
   humanElement: null,
+  selectedPactKeys: [],
+  selectedCardId: null,
+  selectedHandCardId: null,
   players: [],
   activePlayerIndex: 0,
   selectedAttackerId: null,
@@ -475,12 +489,14 @@ const state = {
   battleId: 0,
   floatingPanel: null,
   swapFlash: null,
-  activeGlow: null
+  activeGlow: null,
+  visualFlash: null
 };
 
 const screens = {
   menu: document.getElementById("menuScreen"),
   hero: document.getElementById("heroScreen"),
+  pact: document.getElementById("pactScreen"),
   decks: document.getElementById("decksScreen"),
   collection: document.getElementById("collectionScreen"),
   settings: document.getElementById("settingsScreen"),
@@ -495,10 +511,14 @@ const humanArea = document.getElementById("humanArea");
 const statusText = document.getElementById("statusText");
 const turnTitle = document.getElementById("turnTitle");
 const turnSplash = document.getElementById("turnSplash");
+const battleBanner = document.querySelector(".battle-banner");
 const gameLog = document.getElementById("gameLog");
 const logDrawer = document.getElementById("logDrawer");
 const rulesDrawer = document.getElementById("rulesDrawer");
+const floatingPanels = document.querySelector(".floating-panels");
 const deckLists = document.getElementById("deckLists");
+const pactSelectionContent = document.getElementById("pactSelectionContent");
+const confirmPactsButton = document.getElementById("confirmPactsButton");
 const resultTitle = document.getElementById("resultTitle");
 const resultText = document.getElementById("resultText");
 const endTurnButton = document.getElementById("endTurnButton");
@@ -506,6 +526,7 @@ const toggleLogButton = document.getElementById("toggleLogButton");
 const toggleRulesButton = document.getElementById("toggleRulesButton");
 const soundToggleButton = document.getElementById("soundToggleButton");
 const volumeSlider = document.getElementById("volumeSlider");
+const officialBoardImage = document.getElementById("officialBoardImage");
 const modal = document.getElementById("cardModal");
 const modalBody = document.getElementById("cardModalBody");
 const modalClose = document.getElementById("cardModalClose");
@@ -596,6 +617,9 @@ function startGame() {
   state.screen = "menu";
   state.players = [];
   state.activePlayerIndex = 0;
+  state.selectedPactKeys = [];
+  state.selectedCardId = null;
+  state.selectedHandCardId = null;
   state.selectedAttackerId = null;
   state.pendingTarget = null;
   state.botThinking = false;
@@ -606,12 +630,37 @@ function startGame() {
   state.floatingPanel = null;
   state.swapFlash = null;
   state.activeGlow = null;
+  state.visualFlash = null;
   closeCardModal();
   updateUI();
 }
 
 function selectHero(element) {
   state.humanElement = element;
+  state.selectedPactKeys = [...HEROES[element].pacts];
+  state.screen = "pact";
+  updateUI();
+}
+
+function togglePactSelection(pactKey) {
+  if (!state.humanElement) {
+    return;
+  }
+
+  if (state.selectedPactKeys.includes(pactKey)) {
+    state.selectedPactKeys = state.selectedPactKeys.filter((key) => key !== pactKey);
+  } else if (state.selectedPactKeys.length < MAX_PACTS) {
+    state.selectedPactKeys.push(pactKey);
+  }
+
+  renderPactSelection();
+}
+
+function confirmPactSelection() {
+  if (state.selectedPactKeys.length !== MAX_PACTS) {
+    return;
+  }
+
   startBattle();
 }
 
@@ -623,7 +672,7 @@ function startBattle() {
   nextCardId = 1;
   state.screen = "battle";
   state.players = [
-    buildPlayer(0, "human", humanElement),
+    buildPlayer(0, "human", humanElement, state.selectedPactKeys),
     buildPlayer(1, "bot", botElement)
   ];
   state.activePlayerIndex = 0;
@@ -637,6 +686,9 @@ function startBattle() {
   state.floatingPanel = null;
   state.swapFlash = null;
   state.activeGlow = null;
+  state.selectedCardId = null;
+  state.selectedHandCardId = null;
+  state.visualFlash = null;
   closeCardModal();
 
   state.players.forEach((player) => {
@@ -648,10 +700,11 @@ function startBattle() {
   beginTurn(0);
 }
 
-function buildPlayer(index, role, element) {
+function buildPlayer(index, role, element, pactKeys = null) {
   const hero = HEROES[element];
   const deck = createDeck(element);
-  const pacts = hero.pacts.map((pactKey, slot) => {
+  const selectedPacts = pactKeys && pactKeys.length === MAX_PACTS ? pactKeys : hero.pacts;
+  const pacts = selectedPacts.map((pactKey, slot) => {
     const card = createCard(pactKey);
     card.ownerIndex = index;
     card.slot = slot;
@@ -687,6 +740,7 @@ function buildPlayer(index, role, element) {
     deck,
     hand: [],
     discard: [],
+    dominioEsquecido: [],
     pacts,
     destroyedPacts: 0,
     realm: null,
@@ -710,6 +764,7 @@ function updateUI() {
   });
 
   renderDeckLists();
+  renderPactSelection();
   renderFloatingPanels();
 
   if (state.players.length > 0) {
@@ -731,6 +786,14 @@ function renderBattle() {
   const bot = state.players.find((player) => player.role === "bot");
   const activePlayer = state.players[state.activePlayerIndex];
 
+  if (officialBoardImage) {
+    officialBoardImage.src = CONFIG_TABULEIRO.imagem;
+  }
+
+  if (battleBanner && CONFIG_TABULEIRO.slots.interface) {
+    battleBanner.setAttribute("style", slotStyle(CONFIG_TABULEIRO.slots.interface.barraTurno));
+  }
+
   if (!human || !bot) {
     return;
   }
@@ -744,42 +807,89 @@ function renderBattle() {
   endTurnButton.textContent = state.pendingTarget ? "Escolha um alvo" : "Encerrar Turno";
 }
 
+function getBoardSlot(sideKey, slotKey, index = null) {
+  const side = CONFIG_TABULEIRO.slots[sideKey] || {};
+  const slot = side[slotKey];
+
+  if (Array.isArray(slot)) {
+    return slot[index] || { x: 0, y: 0, w: 1, h: 1 };
+  }
+
+  return slot || { x: 0, y: 0, w: 1, h: 1 };
+}
+
+function slotStyle(slot) {
+  const width = CONFIG_TABULEIRO.largura;
+  const height = CONFIG_TABULEIRO.altura;
+
+  return [
+    `--slot-x:${(slot.x / width) * 100}%`,
+    `--slot-y:${(slot.y / height) * 100}%`,
+    `--slot-w:${(slot.w / width) * 100}%`,
+    `--slot-h:${(slot.h / height) * 100}%`
+  ].join(";");
+}
+
 function renderPlayerBoard(player, isOpponent) {
+  const sideKey = isOpponent ? "oponente" : "jogador";
   const sideClass = isOpponent ? "opponent-board" : "human-board";
   const active = player.index === state.activePlayerIndex ? "active-board" : "";
   const hand = isOpponent ? renderOpponentHand(player) : renderHand(player);
 
   return `
-    <section class="duel-side ${sideClass} ${active} element-${player.element}" aria-label="${escapeHtml(player.label)}">
-      <div class="player-topline">
+    <section class="duel-side ${sideClass} ${active} element-${player.element}" aria-label="${escapeHtml(player.label)}" data-board-side="${sideKey}">
+      <div class="player-topline board-overlay-title ${sideClass}">
         <strong>${escapeHtml(player.heroName)}</strong>
         <span>${escapeHtml(player.heroTitle)}</span>
       </div>
       <div class="duel-grid">
-        ${renderHeroSlot(player)}
+        ${renderHeroSlot(player, sideKey)}
         <div class="pact-lane" aria-label="Pactos de ${escapeHtml(player.heroName)}">
-          ${player.pacts.map((card, slot) => renderPactSlot(player, card, slot)).join("")}
+          ${player.pacts.map((card, slot) => renderPactSlot(player, card, slot, sideKey)).join("")}
         </div>
-        ${renderRealmSlot(player)}
-        ${renderPrimordialSlot(player)}
+        ${renderRealmSlot(player, sideKey)}
+        ${renderPrimordialSlot(player, sideKey)}
+        ${renderPileSlots(player, sideKey)}
       </div>
+      ${renderResourceStrip(player, sideKey)}
       ${hand}
     </section>
   `;
 }
 
-function renderHeroSlot(player) {
+function renderResourceStrip(player, sideKey) {
+  const slot = getBoardSlot(sideKey, "recursos");
+  const label = player.role === "human" ? "Seus recursos" : "Recursos do oponente";
+  const flash = getVisualFlashClass({ type: "hand", playerIndex: player.index });
+  const items = [
+    renderIconStat("vida", `${player.life}/${player.maxLife}`, "Vida", "Vida do Heroi"),
+    renderIconStat("mana", `${player.mana}/${player.manaMax}`, "Mana", "Mana atual e maxima"),
+    renderIconStat("loucura", player.madness, "Loucura", "Loucura acumulada"),
+    renderIconStat("deck", player.deck.length, "Deck", "Cartas restantes no deck"),
+    renderIconStat("abismo", player.discard.length, "Abismo", "Cartas no descarte"),
+    renderIconStat("dominio", player.dominioEsquecido.length, "Dominio Esquecido", "Cartas no Dominio Esquecido")
+  ].join("");
+
+  return `
+    <div class="resource-strip ${flash}" style="${slotStyle(slot)}" aria-label="${escapeHtml(label)}">
+      ${items}
+    </div>
+  `;
+}
+
+function renderHeroSlot(player, sideKey) {
   const heroCard = createHeroCard(player);
   const targetable = isTargetable({ type: "hero", playerIndex: player.index, player });
   const directTarget = canHeroReceiveAttack(player);
+  const flash = getVisualFlashClass({ type: "hero", playerIndex: player.index });
 
   return `
-    <button type="button" class="board-slot hero-slot ${targetable ? "targetable" : ""} ${directTarget ? "attack-target" : ""}"
-      data-hero-index="${player.index}" data-detail-type="hero" data-detail-player-index="${player.index}">
+    <button type="button" class="board-slot hero-slot ${flash} ${targetable ? "targetable" : ""} ${directTarget ? "attack-target" : ""}"
+      style="${slotStyle(getBoardSlot(sideKey, "heroi"))}" data-hero-index="${player.index}" data-detail-type="hero" data-detail-player-index="${player.index}"
+      ${tooltipAttr(`${player.heroName}: ${player.life}/${player.maxLife} Vida | Mana ${player.mana}/${player.manaMax} | Loucura ${player.madness}`)}>
       <div class="slot-label">Herói</div>
       ${renderCardArt(heroCard, "hero-art")}
-      <div class="slot-card-copy">
-        <strong>${escapeHtml(player.heroName)}</strong>
+      <div class="slot-card-copy hero-card-stats">
         <span>${renderIconStat("vida", `${player.life}/${player.maxLife}`, "Vida")}</span>
         <span>${renderIconStat("mana", `${player.mana}/${player.manaMax}`, "Mana")}</span>
         <span>${renderIconStat("loucura", player.madness, "Loucura")}</span>
@@ -788,8 +898,9 @@ function renderHeroSlot(player) {
   `;
 }
 
-function renderPactSlot(player, card, slot) {
+function renderPactSlot(player, card, slot, sideKey) {
   const isActive = slot === ACTIVE_SLOT;
+  const boardSlot = getBoardSlot(sideKey, "pactos", slot);
   const flash = state.swapFlash && state.swapFlash.playerIndex === player.index && state.swapFlash.slot === slot ? "swap-flash" : "";
   const activeGlow = state.activeGlow && state.activeGlow.playerIndex === player.index && state.activeGlow.slot === slot ? "active-glow" : "";
   const canSwap = canHumanSwap(player, slot);
@@ -797,7 +908,8 @@ function renderPactSlot(player, card, slot) {
   if (!card) {
     return `
       <div class="board-slot pact-slot empty-pact ${isActive ? "active-pact-slot" : "bench-pact-slot"} ${flash} ${activeGlow}"
-        data-field-index="${player.index}" data-field-slot="${slot}">
+        style="${slotStyle(boardSlot)}" data-field-index="${player.index}" data-field-slot="${slot}"
+        ${tooltipAttr(isActive ? "Pacto Ativo: pode atacar, mas nao usa habilidades ativas." : "Banco: nao ataca, mas pode usar habilidades.")}>
         <div class="slot-label">${isActive ? "Pacto Ativo" : "Banco"}</div>
         <span class="empty-slot-text">Destruído</span>
       </div>
@@ -810,14 +922,18 @@ function renderPactSlot(player, card, slot) {
   const blocked = isAbilityBlocked(card);
   const frozen = isFrozen(card);
   const taunt = isTaunting(card);
+  const visualFlash = getVisualFlashClass({ cardId: card.id });
 
   return `
-    <div class="board-slot pact-slot ${isActive ? "active-pact-slot" : "bench-pact-slot"} ${flash} ${activeGlow} ${targetable ? "targetable" : ""}"
-      data-field-index="${player.index}" data-field-slot="${slot}">
+    <div class="board-slot pact-slot ${visualFlash} ${isActive ? "active-pact-slot" : "bench-pact-slot"} ${flash} ${activeGlow} ${targetable ? "targetable" : ""}"
+      style="${slotStyle(boardSlot)}" data-field-index="${player.index}" data-field-slot="${slot}"
+      ${tooltipAttr(isActive ? "Pacto Ativo: pode atacar, mas nao usa habilidades ativas." : "Banco: nao ataca, mas pode usar habilidades.")}>
       <div class="slot-label">${isActive ? "Pacto Ativo" : "Banco"}</div>
       <button type="button" class="battle-card pact-card element-${card.element} ${canCardAttack ? "can-attack" : ""} ${selected ? "selected" : ""} ${frozen ? "frozen" : ""}"
-        data-field-index="${player.index}" data-field-slot="${slot}" data-detail-type="card" data-detail-card-id="${card.id}">
+        data-field-index="${player.index}" data-field-slot="${slot}" data-detail-type="card" data-detail-card-id="${card.id}"
+        ${tooltipAttr(`${card.name} | Ataque ${getAttack(card)} | Vida ${card.currentHealth}/${getMaxHealth(card)} | Duplo clique para ampliar`)}>
         ${renderCardArt(card, "pact-art")}
+        ${isActive ? "<span class=\"active-seal\" aria-hidden=\"true\">Ativo</span>" : ""}
         <span class="card-name">${escapeHtml(card.name)}</span>
         <span class="card-stats">
           ${renderIconStat("ataque", getAttack(card), "Ataque")}
@@ -844,9 +960,11 @@ function renderAbilityBar(player, card, isActive) {
   const buttons = card.abilities.map((ability, index) => {
     const usable = canUsePactAbility(player, card, ability);
     const cost = formatCost(getDiscountedCost(player, card, ability));
+    const tooltip = `${ability.name} | Custo: ${cost} | ${ability.text || ""}`;
     return `
-      <button type="button" class="ability-button" data-ability-card-id="${card.id}" data-ability-index="${index}" ${usable ? "" : "disabled"}>
-        <span>${escapeHtml(ability.name)}</span>
+      <button type="button" class="ability-button" data-ability-card-id="${card.id}" data-ability-index="${index}" ${usable ? "" : "disabled"}
+        aria-label="${escapeHtml(ability.name)}" ${tooltipAttr(tooltip)}>
+        <span>${escapeHtml(compactAbilityName(ability.name))}</span>
         <small>${escapeHtml(cost)}</small>
       </button>
     `;
@@ -854,17 +972,18 @@ function renderAbilityBar(player, card, isActive) {
 
   return `
     <div class="ability-bar ${isActive ? "active-ability-lock" : ""}">
-      ${isActive ? "<span class=\"ability-lock\">Ativo: não usa habilidades</span>" : buttons}
+      ${isActive ? `<span class="ability-lock" ${tooltipAttr("Pacto Ativo pode atacar, mas nao usa habilidades ativas.")}>Ativo</span>` : buttons}
     </div>
   `;
 }
 
-function renderRealmSlot(player) {
+function renderRealmSlot(player, sideKey) {
   const realm = player.realm;
+  const boardSlot = getBoardSlot(sideKey, "reino");
 
   if (!realm) {
     return `
-      <div class="board-slot realm-slot empty-support">
+      <div class="board-slot realm-slot empty-support" style="${slotStyle(boardSlot)}" ${tooltipAttr("Nenhum Reino ativo.")}>
         <div class="slot-label">Reino</div>
         <span class="empty-slot-text">Sem Reino</span>
       </div>
@@ -872,26 +991,46 @@ function renderRealmSlot(player) {
   }
 
   return `
-    <button type="button" class="board-slot realm-slot element-${realm.element}" data-detail-type="realm" data-detail-player-index="${player.index}">
+    <button type="button" class="board-slot realm-slot element-${realm.element}" style="${slotStyle(boardSlot)}" data-detail-type="realm" data-detail-player-index="${player.index}"
+      ${tooltipAttr(`${realm.name} | ${realm.enter || realm.effect || "Reino ativo"} | Duplo clique para ampliar`)}>
       <div class="slot-label">Reino</div>
       ${renderCardArt(realm, "realm-art")}
       <div class="slot-card-copy">
         <strong>${escapeHtml(realm.name)}</strong>
-        <span>${escapeHtml(realm.enter || realm.effect)}</span>
       </div>
     </button>
   `;
 }
 
-function renderPrimordialSlot(player) {
+function renderPileSlots(player, sideKey) {
+  const piles = [
+    { key: "deck", label: "Deck", value: player.deck.length, icon: "deck", tooltip: "Cartas restantes no deck." },
+    { key: "abismo", label: "Abismo", value: player.discard.length, icon: "abismo", tooltip: "Cartas no descarte." },
+    { key: "dominio", label: "Dominio Esquecido", value: player.dominioEsquecido.length, icon: "dominio", tooltip: "Cartas removidas ou esquecidas." }
+  ];
+
+  return piles.map((pile) => `
+    <button type="button" class="board-pile board-pile-${pile.key}" style="${slotStyle(getBoardSlot(sideKey, pile.key))}" aria-label="${escapeHtml(pile.label)}" ${tooltipAttr(pile.tooltip)}>
+      ${renderIconStat(pile.icon, pile.value, pile.label)}
+      <span>${escapeHtml(pile.label)}</span>
+    </button>
+  `).join("");
+}
+
+function renderPrimordialSlot(player, sideKey) {
   const primordial = player.primordial;
+  const boardSlot = getBoardSlot(sideKey, "primordial");
   const stateInfo = getPrimordialState(player);
   const canInvoke = canHumanAct() && player.index === 0 && canInvokePrimordial(player);
   const invoked = player.primordialInvoked;
+  const primordialTooltip = stateInfo.className === "locked"
+    ? `Disponivel ao atingir ${primordial.cost} Mana. Atual: ${player.mana}/${primordial.cost}.`
+    : `${primordial.name} | ${stateInfo.label} | Duplo clique para ampliar`;
 
   return `
     <button type="button" class="board-slot primordial-slot element-${primordial.element} ${stateInfo.className}"
-      data-primordial-index="${player.index}" data-detail-type="primordial" data-detail-player-index="${player.index}">
+      style="${slotStyle(boardSlot)}" data-primordial-index="${player.index}" data-detail-type="primordial" data-detail-player-index="${player.index}"
+      ${tooltipAttr(primordialTooltip)}>
       <div class="slot-label">Primordial</div>
       ${renderCardArt(primordial, "primordial-art")}
       <div class="slot-card-copy">
@@ -903,6 +1042,7 @@ function renderPrimordialSlot(player) {
           ${renderIconStat("vida_pacto", invoked ? `${primordial.currentHealth}/${getMaxHealth(primordial)}` : primordial.baseHealth, "Vida")}
         </span>
       </div>
+      ${!invoked ? `<span class="primordial-lock-badge">${stateInfo.className === "locked" ? "Bloqueado" : "Disponivel"}</span>` : ""}
       ${canInvoke ? "<span class=\"primordial-call\">Invocar</span>" : ""}
       ${renderPrimordialAbility(player)}
     </button>
@@ -924,7 +1064,8 @@ function renderPrimordialAbility(player) {
 
   return `
     <span class="primordial-actions">
-      <span class="primordial-ability ${disabled ? "disabled" : ""}" data-primordial-ability-player-index="${player.index}">
+      <span class="primordial-ability ${disabled ? "disabled" : ""}" data-primordial-ability-player-index="${player.index}"
+        ${tooltipAttr(`${ability.name} | ${ability.text || ""}`)}>
         ${escapeHtml(ability.name)}
       </span>
     </span>
@@ -942,12 +1083,16 @@ function renderOpponentHand(player) {
 }
 
 function renderHand(player) {
+  const flash = getVisualFlashClass({ type: "hand", playerIndex: player.index });
   const cards = player.hand.map((card, index) => {
     const playable = canPlayCard(player, card);
+    const selected = state.selectedHandCardId === card.id;
+    const tooltip = `${cardTooltip(card)} | Clique para selecionar/jogar | Duplo clique para ampliar`;
 
     return `
-      <button type="button" class="battle-card hand-card element-${card.element} ${playable ? "playable" : ""}"
-        data-hand-index="${index}" data-detail-type="card-key" data-detail-card-key="${card.key}">
+      <button type="button" class="battle-card hand-card element-${card.element} ${playable ? "playable" : ""} ${selected ? "selected" : ""}"
+        data-hand-index="${index}" data-detail-type="card-key" data-detail-card-key="${card.key}"
+        aria-label="${escapeHtml(card.name)}" ${tooltipAttr(tooltip)} style="--hand-index:${index}">
         ${renderCardArt(card, "hand-art")}
         <span class="card-name">${escapeHtml(card.name)}</span>
         <span class="card-type">${escapeHtml(TYPE_LABELS[card.type])}</span>
@@ -961,7 +1106,7 @@ function renderHand(player) {
   }).join("");
 
   return `
-    <div class="hand-zone">
+    <div class="hand-zone ${flash}" style="${slotStyle(getBoardSlot("jogador", "mao"))}">
       <div class="hand-topline">
         <span>Sua Mão (${player.hand.length})</span>
         <span>${renderIconStat("deck", player.deck.length, "Deck")} Descarte ${player.discard.length}</span>
@@ -1002,6 +1147,44 @@ function renderDeckLists() {
   }).join("");
 }
 
+function renderPactSelection() {
+  if (!pactSelectionContent || !confirmPactsButton || !state.humanElement) {
+    return;
+  }
+
+  const hero = HEROES[state.humanElement];
+  const cards = hero.pacts.map((pactKey) => {
+    const card = CARD_DEFS[pactKey];
+    const selected = state.selectedPactKeys.includes(pactKey);
+
+    return `
+      <button type="button" class="pact-choice-card element-${card.element} ${selected ? "selected-pact" : ""}"
+        data-select-pact="${escapeHtml(pactKey)}" data-detail-type="card-key" data-detail-card-key="${escapeHtml(pactKey)}">
+        ${renderCardArt(card, "pact-choice-art")}
+        <span>
+          <strong>${escapeHtml(card.name)}</strong>
+          <small>${escapeHtml(card.passiveName)} · ${renderPlainCost(card.cost || 0)}</small>
+        </span>
+        <span class="card-stats">
+          ${renderIconStat("ataque", card.attack, "Ataque")}
+          ${renderIconStat("vida_pacto", card.health, "Vida")}
+        </span>
+      </button>
+    `;
+  }).join("");
+
+  pactSelectionContent.innerHTML = `
+    <article class="pact-selection-copy">
+      <p class="eyebrow">${escapeHtml(hero.heroName)}</p>
+      <h3>${escapeHtml(hero.title)}</h3>
+      <p>Selecione exatamente 3 Pactos para iniciar a partida.</p>
+      <strong>${state.selectedPactKeys.length}/3 selecionados</strong>
+    </article>
+    ${cards}
+  `;
+  confirmPactsButton.disabled = state.selectedPactKeys.length !== MAX_PACTS;
+}
+
 function renderCardArt(card, className = "") {
   const candidates = withFallbacks(card.image, card.imageFallbacks);
 
@@ -1017,10 +1200,49 @@ function renderCardArt(card, className = "") {
   `;
 }
 
-function renderIconStat(icon, value, label) {
+function tooltipAttr(text) {
+  return text ? `data-tooltip="${escapeHtml(text)}"` : "";
+}
+
+function compactAbilityName(name) {
+  return String(name || "")
+    .split(" ")
+    .filter(Boolean)[0] || "Habilidade";
+}
+
+function cardTooltip(card) {
+  const parts = [
+    card.name,
+    TYPE_LABELS[card.type] || "Carta",
+    card.cost ? `Custo: ${card.cost} Mana` : "",
+    card.effect || card.passive || card.enter || ""
+  ];
+
+  return parts.filter(Boolean).join(" | ");
+}
+
+function getVisualFlashClass(target) {
+  const flash = state.visualFlash;
+
+  if (!flash || !target) {
+    return "";
+  }
+
+  if (target.cardId && flash.cardId === target.cardId) {
+    return `${flash.kind}-flash`;
+  }
+
+  if (target.type && flash.type === target.type && target.playerIndex === flash.playerIndex) {
+    return `${flash.kind}-flash`;
+  }
+
+  return "";
+}
+
+function renderIconStat(icon, value, label, tooltip = label) {
   const src = ICON_ASSETS[icon];
   return `
-    <span class="icon-stat" title="${escapeHtml(label)}">
+    <span class="icon-stat" title="${escapeHtml(label)}" ${tooltipAttr(tooltip)}>
       ${src ? `<img src="${escapeHtml(src)}" alt="">` : ""}
       <strong>${escapeHtml(value)}</strong>
     </span>
@@ -1081,9 +1303,7 @@ function beginTurn(playerIndex) {
     player.primordial.primordialAbilityUsedTurn = 0;
   }
 
-  if (player.turnsTaken > 1) {
-    drawCard(player, 1);
-  }
+  drawCard(player, 1);
   logAction(`Começou o turno de ${player.heroName}. Mana ${player.mana}/${player.manaMax}.`);
   state.statusMessage = player.role === "human" ? `Seu turno com ${player.heroName}.` : "O oponente está pensando...";
   updateUI();
@@ -1147,6 +1367,8 @@ function drawCard(player, amount = 1, options = {}) {
 
   if (drawn > 0 && !options.silent) {
     logAction(`${player.heroName} comprou ${drawn} ${drawn === 1 ? "carta" : "cartas"}.`);
+    markVisualFlash({ type: "hand", playerIndex: player.index, kind: "draw" });
+    showBattleFeedback(`+${drawn} carta${drawn === 1 ? "" : "s"}`, "effect-draw");
   }
 
   return drawn;
@@ -1162,6 +1384,14 @@ function playCard(handIndex) {
 
   if (!card || !canPlayCard(player, card)) {
     showMessage("Essa carta não pode ser jogada agora.");
+    return;
+  }
+
+  if (state.selectedHandCardId !== card.id) {
+    state.selectedCardId = card.id;
+    state.selectedHandCardId = card.id;
+    showMessage(`${card.name} selecionada. Clique novamente para jogar ou dê dois cliques para ampliar.`);
+    updateUI();
     return;
   }
 
@@ -1194,7 +1424,10 @@ function playCardWithTarget(player, handIndex, target) {
   player.mana -= card.cost;
   player.hand.splice(handIndex, 1);
   player.discard.push(card);
+  state.selectedCardId = null;
+  state.selectedHandCardId = null;
   logAction(`${player.heroName} jogou ${card.name}.`);
+  showBattleFeedback(card.name, "effect-summon");
   resolvePlayedCard(player, card, target);
   checkGameOver();
   updateUI();
@@ -1290,6 +1523,7 @@ function setRealm(player, card) {
   realm.ownerIndex = player.index;
   player.realm = realm;
   logAction(`${player.heroName} ativou o Reino ${realm.name}.`);
+  showBattleFeedback("Reino ativado", "effect-summon");
   clampAllPacts();
 }
 
@@ -1348,6 +1582,7 @@ function resolvePactAbility(player, card, ability, target) {
 
   card.abilityUsedTurn = player.turnsTaken;
   logAction(`${card.name} usou ${ability.name}.`);
+  showBattleFeedback(ability.name, "effect-attack");
 
   switch (ability.action) {
     case "damage3":
@@ -1482,6 +1717,8 @@ function attack(attackerRef, defenderRef) {
   }
 
   attacker.hasAttacked = true;
+  markVisualFlash({ type: "card", cardId: attacker.id, kind: "attack" });
+  showBattleFeedback("Ataque", "effect-attack");
 
   if (defenderRef.type === "hero") {
     const defender = state.players[defenderRef.playerIndex];
@@ -1560,6 +1797,7 @@ function swapPact(player, slot) {
   state.swapFlash = { playerIndex: player.index, slot };
   state.activeGlow = { playerIndex: player.index, slot: ACTIVE_SLOT };
   logAction(`${player.heroName} trocou o Pacto Ativo.`);
+  showBattleFeedback("Pacto Ativo trocado", "effect-turn-banner");
   showMessage(`${player.pacts[ACTIVE_SLOT].name} é o novo Pacto Ativo.`);
   window.setTimeout(() => {
     state.swapFlash = null;
@@ -1597,6 +1835,7 @@ function botSwapIfUseful(bot) {
   refreshPactSlots(bot);
   bot.swappedThisTurn = true;
   logAction(`${bot.heroName} trocou o Pacto Ativo.`);
+  showBattleFeedback("Pacto Ativo trocado", "effect-turn-banner");
   return true;
 }
 
@@ -1631,6 +1870,8 @@ function handleFieldClick(playerIndex, slot) {
     }
 
     state.selectedAttackerId = card.id;
+    state.selectedCardId = card.id;
+    state.selectedHandCardId = null;
     showMessage(`${card.name} foi selecionado para atacar.`);
     updateUI();
     return;
@@ -1696,7 +1937,7 @@ function invokePrimordial(player, target = null) {
     return false;
   }
 
-  if (player.primordial.key === "tronoAbissal" && !target && hasValidTargets(player, "enemyPact")) {
+  if (player.primordial.key === "coracaoAbismo" && !target && hasValidTargets(player, "enemyPact")) {
     requestTarget({
       message: "Escolha um Pacto inimigo para congelar.",
       validTarget: (candidate) => isValidTargetForRule(player, "enemyPact", candidate),
@@ -1710,12 +1951,13 @@ function invokePrimordial(player, target = null) {
   player.primordial.currentHealth = getMaxHealth(player.primordial);
   logAction(`${player.heroName} invocou ${player.primordial.name}.`);
   flashTurnSplash("Primordial Invocado");
+  showBattleFeedback("Primordial invocado", "effect-primordial-ready");
 
-  if (player.primordial.key === "reiChamas") {
+  if (player.primordial.key === "tronoSetimaChama") {
     damageAllEnemyPacts(player, 3, player.primordial);
   }
 
-  if (player.primordial.key === "tronoAbissal" && target && target.card) {
+  if (player.primordial.key === "coracaoAbismo" && target && target.card) {
     freezePact(target.card);
   }
 
@@ -1896,6 +2138,8 @@ function damagePact(card, amount, source) {
   const reduction = card.key === "varkhan" || card.key === "lysora" ? 1 : 0;
   const finalDamage = Math.max(0, amount - reduction);
   card.currentHealth -= finalDamage;
+  markVisualFlash({ type: "card", cardId: card.id, kind: "damage" });
+  showBattleFeedback(`-${finalDamage}`, "effect-damage");
   logAction(`${card.name} recebeu ${finalDamage} de dano${reduction ? " após redução" : ""}.`);
 
   if (card.currentHealth <= 0) {
@@ -1928,7 +2172,7 @@ function destroyPact(card, source, options = {}) {
     logAction("Fornalha Eterna recuperou 1 Mana.");
   }
 
-  if (source && source.type === "primordial" && source.key === "reiChamas" && sourceOwner && sourceOwner.index !== owner.index) {
+  if (source && source.type === "primordial" && source.key === "tronoSetimaChama" && sourceOwner && sourceOwner.index !== owner.index) {
     source.permanentAttack += 1;
     logAction(`${source.name} recebeu +1 Ataque permanente.`);
   }
@@ -1948,6 +2192,8 @@ function healPact(card, amount, healer) {
   const healed = card.currentHealth - before;
 
   if (healed > 0) {
+    markVisualFlash({ type: "card", cardId: card.id, kind: "heal" });
+    showBattleFeedback(`+${healed}`, "effect-heal");
     logAction(`${card.name} curou ${healed} de Vida.`);
     handleAllyHealed(state.players[location.playerIndex], healer);
   }
@@ -1974,6 +2220,8 @@ function healHero(player, amount) {
   player.life = Math.min(player.maxLife, player.life + amount);
   const healed = player.life - before;
   if (healed > 0) {
+    markVisualFlash({ type: "hero", playerIndex: player.index, kind: "heal" });
+    showBattleFeedback(`+${healed}`, "effect-heal");
     logAction(`${player.heroName} curou ${healed} de Vida.`);
   }
   return healed;
@@ -1981,6 +2229,8 @@ function healHero(player, amount) {
 
 function damageHero(player, amount, source) {
   player.life = Math.max(0, player.life - amount);
+  markVisualFlash({ type: "hero", playerIndex: player.index, kind: "damage" });
+  showBattleFeedback(`-${amount}`, "effect-damage");
   logAction(`${player.heroName} recebeu ${amount} de dano.`);
   checkGameOver();
 }
@@ -1992,17 +2242,23 @@ function freezePact(card) {
   }
   const owner = state.players[location.playerIndex];
   card.frozenUntilTurn = owner.turnsTaken + 1;
+  markVisualFlash({ type: "card", cardId: card.id, kind: "freeze" });
+  showBattleFeedback("Congelado", "effect-freeze");
   logAction(`${card.name} foi congelado até o próximo turno.`);
 }
 
 function addTemporaryAttack(card, amount) {
   card.temporaryAttack += amount;
+  markVisualFlash({ type: "card", cardId: card.id, kind: "attack" });
+  showBattleFeedback(`+${amount} Ataque`, "effect-attack");
   logAction(`${card.name} recebeu +${amount} Ataque neste turno.`);
 }
 
 function addTemporaryHealth(card, amount) {
   card.temporaryHealth += amount;
   card.currentHealth += amount;
+  markVisualFlash({ type: "card", cardId: card.id, kind: "heal" });
+  showBattleFeedback(`+${amount} Vida`, "effect-heal");
   logAction(`${card.name} recebeu +${amount} Vida temporária.`);
 }
 
@@ -2051,7 +2307,7 @@ function getMaxHealth(card) {
     health += 2;
   }
 
-  if (owner && owner.primordialInvoked && owner.primordial.key === "tronoAbissal" && card.type === "pact" && card.element === "water") {
+  if (owner && owner.primordialInvoked && owner.primordial.key === "coracaoAbismo" && card.type === "pact" && card.element === "water") {
     health += 2;
   }
 
@@ -2133,6 +2389,8 @@ function endTurn() {
   const player = state.players[state.activePlayerIndex];
   expireEndOfTurnEffects(player);
   state.selectedAttackerId = null;
+  state.selectedCardId = null;
+  state.selectedHandCardId = null;
   logAction(`${player.heroName} encerrou o turno.`);
   beginTurn(getOpponent(player.index).index);
 }
@@ -2404,6 +2662,29 @@ function showMessage(message) {
   updateUI();
 }
 
+function markVisualFlash(payload) {
+  const token = Date.now() + Math.random();
+  state.visualFlash = { ...payload, token };
+
+  window.setTimeout(() => {
+    if (state.visualFlash && state.visualFlash.token === token) {
+      state.visualFlash = null;
+      updateUI();
+    }
+  }, 560);
+}
+
+function showBattleFeedback(message, className = "") {
+  const feedback = document.createElement("div");
+  feedback.className = `battle-feedback ${className}`.trim();
+  feedback.textContent = message;
+  document.body.appendChild(feedback);
+
+  window.setTimeout(() => {
+    feedback.remove();
+  }, 920);
+}
+
 function flashTurnSplash(message) {
   if (!turnSplash) {
     return;
@@ -2429,6 +2710,9 @@ function renderFloatingPanels() {
   rulesDrawer.hidden = state.floatingPanel !== "rules";
   logDrawer.classList.toggle("is-open", state.floatingPanel === "log");
   rulesDrawer.classList.toggle("is-open", state.floatingPanel === "rules");
+  if (floatingPanels) {
+    floatingPanels.classList.toggle("is-open", Boolean(state.floatingPanel));
+  }
   toggleLogButton.classList.toggle("active-toggle", state.floatingPanel === "log");
   toggleRulesButton.classList.toggle("active-toggle", state.floatingPanel === "rules");
   toggleLogButton.setAttribute("aria-expanded", String(state.floatingPanel === "log"));
@@ -2444,6 +2728,9 @@ function openCardModal(detail) {
   modal.hidden = false;
   modal.classList.add("is-open");
   document.body.classList.add("modal-open");
+  if (modalClose) {
+    modalClose.focus({ preventScroll: true });
+  }
 }
 
 function closeCardModal() {
@@ -2568,14 +2855,56 @@ function handleDoubleClick(event) {
   openCardModal(buildDetailFromElement(detailElement));
 }
 
+function handlePointerDown(event) {
+  const detailElement = event.target.closest("[data-detail-type]");
+
+  if (!detailElement) {
+    return;
+  }
+
+  cancelLongPress();
+  longPressFired = false;
+  longPressTimer = window.setTimeout(() => {
+    longPressFired = true;
+    openCardModal(buildDetailFromElement(detailElement));
+  }, 620);
+}
+
+function cancelLongPress() {
+  if (longPressTimer) {
+    window.clearTimeout(longPressTimer);
+    longPressTimer = null;
+  }
+}
+
 function handleClick(event) {
-  if (event.target.closest(".modal-close")) {
+  const target = event.target;
+
+  if (longPressFired) {
+    longPressFired = false;
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+
+  if (target.closest(".modal-close")) {
     closeCardModal();
     return;
   }
 
-  if (event.target === modal) {
+  if (target === modal) {
     closeCardModal();
+    return;
+  }
+
+  if (
+    state.floatingPanel &&
+    !target.closest(".floating-panel") &&
+    !target.closest("#toggleLogButton") &&
+    !target.closest("#toggleRulesButton")
+  ) {
+    state.floatingPanel = null;
+    renderFloatingPanels();
     return;
   }
 
@@ -2585,7 +2914,6 @@ function handleClick(event) {
     return;
   }
 
-  const target = event.target;
   window.clearTimeout(clickTimer);
   clickTimer = window.setTimeout(() => {
     processClick(target);
@@ -2603,6 +2931,12 @@ function processClick(target) {
   const heroChoice = target.closest("[data-select-hero]");
   if (heroChoice) {
     selectHero(heroChoice.dataset.selectHero);
+    return;
+  }
+
+  const pactChoice = target.closest("[data-select-pact]");
+  if (pactChoice) {
+    togglePactSelection(pactChoice.dataset.selectPact);
     return;
   }
 
@@ -2663,11 +2997,20 @@ function sleep(ms) {
 
 document.addEventListener("click", handleClick);
 document.addEventListener("dblclick", handleDoubleClick);
+document.addEventListener("pointerdown", handlePointerDown);
+document.addEventListener("pointerup", cancelLongPress);
+document.addEventListener("pointercancel", cancelLongPress);
+document.addEventListener("pointermove", cancelLongPress);
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     if (state.pendingTarget) {
       state.pendingTarget = null;
       showMessage("Alvo cancelado.");
+      return;
+    }
+    if (state.floatingPanel) {
+      state.floatingPanel = null;
+      renderFloatingPanels();
       return;
     }
     closeCardModal();
@@ -2705,6 +3048,10 @@ toggleRulesButton.addEventListener("click", () => toggleBattlePanel("rules"));
 document.getElementById("backToMenuButton").addEventListener("click", startGame);
 document.getElementById("resultRestartButton").addEventListener("click", startBattle);
 document.getElementById("resultMenuButton").addEventListener("click", startGame);
+
+if (confirmPactsButton) {
+  confirmPactsButton.addEventListener("click", confirmPactSelection);
+}
 
 if (modalClose) {
   modalClose.addEventListener("click", closeCardModal);
