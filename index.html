@@ -13,7 +13,7 @@
       <div class="menu-shell">
         <p class="eyebrow">Protótipo Alpha Local</p>
         <h1>Pacto dos Lendários</h1>
-        <p class="menu-subtitle">Kael Drakar e Nereia Val'Kora disputam o destino dos reinos antigos.</p>
+        <p class="menu-subtitle">Domadores firmam pactos com feras antigas pelo destino dos reinos esquecidos.</p>
         <div class="menu-actions">
           <button type="button" id="startMenuButton" class="primary-action">Jogar</button>
           <button type="button" id="decksMenuButton">Baralhos</button>
@@ -25,31 +25,31 @@
       </div>
     </section>
 
-    <section id="heroScreen" class="screen hero-screen" aria-label="Seleção de herói">
+    <section id="heroScreen" class="screen hero-screen" aria-label="Seleção de domador">
       <header class="screen-header">
         <button type="button" class="ghost-button" data-screen="menu">Voltar</button>
         <div>
-          <p class="eyebrow">Escolha seu pacto</p>
-          <h2>Seleção de Herói</h2>
+          <p class="eyebrow">Passo 1</p>
+          <h2>Escolha seu Domador</h2>
         </div>
       </header>
 
       <div class="hero-choice-grid">
-        <button type="button" class="hero-choice fire-choice" data-select-hero="fire">
-          <img src="assets/heroes/kael.jpeg" alt="Kael Drakar">
+        <button type="button" class="hero-choice fire-choice" data-select-tamer="aeron">
+          <img src="assets/heroes/domador_1.jpeg" alt="Aeron Vhalor">
           <span class="choice-body">
-            <span class="eyebrow">Elemento Fogo</span>
-            <strong>Kael Drakar, o Rei das Chamas Eternas</strong>
-            <span>Agressão, dano e sacrifício</span>
+            <span class="eyebrow">Domador</span>
+            <strong>Aeron Vhalor</strong>
+            <span>O Mestre dos Pactos Perdidos</span>
           </span>
         </button>
 
-        <button type="button" class="hero-choice water-choice" data-select-hero="water">
-          <img src="assets/heroes/nereia.jpeg" alt="Nereia Val'Kora">
+        <button type="button" class="hero-choice water-choice" data-select-tamer="lyra">
+          <img src="assets/heroes/domadora_1.jpeg" alt="Lyra Noctis">
           <span class="choice-body">
-            <span class="eyebrow">Elemento Água</span>
-            <strong>Nereia Val'Kora, A Mãe das Profundezas</strong>
-            <span>Cura, controle e resistência</span>
+            <span class="eyebrow">Domadora</span>
+            <strong>Lyra Noctis</strong>
+            <span>A Guardiã das Mil Feras</span>
           </span>
         </button>
       </div>
@@ -70,14 +70,14 @@
       <header class="screen-header">
         <button type="button" class="ghost-button" data-screen="hero">Voltar</button>
         <div>
-          <p class="eyebrow">Forme seu pacto</p>
-          <h2>Seleção de Pactos</h2>
+          <p class="eyebrow">Passos 2 e 3</p>
+          <h2>Escolha Pactos e Primordial</h2>
         </div>
       </header>
 
       <div class="pact-selection-panel">
         <div id="pactSelectionContent" class="pact-selection-grid"></div>
-        <button type="button" id="confirmPactsButton" class="primary-action" disabled>Confirmar</button>
+        <button type="button" id="confirmPactsButton" class="primary-action" disabled>Confirmar Seleção</button>
       </div>
     </section>
 
@@ -92,7 +92,7 @@
 
       <div class="feature-panel">
         <h3>Cartas Disponíveis</h3>
-        <p>O protótipo contém dois heróis jogáveis, seus Pactos fixos, Reinos, Primordiais e decks compactos de Magias, Equipamentos e Eventos.</p>
+        <p>O protótipo contém Domadores visuais, Pactos livres, Reinos, Primordiais e decks compactos de Magias, Equipamentos e Eventos.</p>
       </div>
     </section>
 
@@ -151,12 +151,12 @@
 
       <div class="rules-panel">
         <ul>
-          <li>Cada jogador começa com 1 Herói, 3 Pactos fixos, 1 slot de Reino e 1 Pacto Primordial exclusivo bloqueado.</li>
+          <li>Cada jogador escolhe 1 Domador, 3 Pactos livres, 1 slot de Reino e 1 Pacto Primordial bloqueado.</li>
           <li>O Pacto do meio é o Pacto Ativo: ele pode atacar, mas não usa habilidades ativas.</li>
           <li>Os Pactos laterais ficam no banco: não atacam, mas podem usar 1 habilidade por turno.</li>
           <li>Uma vez por turno, você pode trocar o Pacto Ativo com um Pacto do banco.</li>
           <li>Mana começa em 1, aumenta +1 de Mana máxima por turno, restaura no início do turno e vai até 10.</li>
-          <li>Você vence ao reduzir a Vida do Herói inimigo a 0 ou destruir os 3 Pactos inimigos.</li>
+          <li>Você vence ao reduzir a Vida do Domador inimigo a 0 ou destruir os 3 Pactos inimigos.</li>
           <li>Dê dois cliques em qualquer carta para abrir os detalhes completos no modal central.</li>
         </ul>
       </div>
@@ -199,7 +199,7 @@
             <li>Pactos laterais usam habilidades, uma vez por turno cada.</li>
             <li>Troque o Pacto Ativo uma vez por turno.</li>
             <li>Primordial fica bloqueado até você ter 10 Mana.</li>
-            <li>Vitória: Herói inimigo a 0 Vida ou 3 Pactos destruídos.</li>
+            <li>Vitória: Domador inimigo a 0 Vida ou 3 Pactos destruídos.</li>
           </ul>
         </section>
       </div>

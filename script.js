@@ -9,7 +9,6 @@ const CLICK_DELAY = 180;
 const ICON_ASSETS = {
   vida: "assets/icons/vida.jpeg",
   mana: "assets/icons/mana.jpeg",
-  loucura: "assets/icons/abismo.jpeg",
   ataque: "assets/icons/ataque.jpeg",
   vida_pacto: "assets/icons/vida_pacto.jpeg",
   deck: "assets/icons/deck.jpeg",
@@ -18,7 +17,7 @@ const ICON_ASSETS = {
 };
 
 const TYPE_LABELS = {
-  hero: "Herói",
+  tamer: "Domador",
   pact: "Pacto",
   primordial: "Pacto Primordial",
   realm: "Reino",
@@ -38,6 +37,7 @@ const ELEMENT_CLASSES = ["element-fire", "element-water", "element-neutral"];
 
 let nextCardId = 1;
 let clickTimer = null;
+let pendingClickTarget = null;
 let longPressTimer = null;
 let longPressFired = false;
 
@@ -67,7 +67,7 @@ const CARD_DEFS = {
     abilities: [
       { name: "Mordida Incandescente", cost: { mana: 2 }, text: "Cause 3 de dano.", action: "damage3", target: "enemyAny" },
       { name: "Explosão de Brasas", cost: { mana: 4 }, text: "Cause 2 de dano.", action: "damage2", target: "enemyAny" },
-      { name: "Fornalha Interior", cost: { madness: 2 }, text: "Recebe +3 Ataque neste turno.", action: "selfAttack3" }
+      { name: "Fornalha Interior", cost: { mana: 2 }, text: "Recebe +3 Ataque neste turno.", action: "selfAttack3" }
     ]
   },
   varkhan: {
@@ -118,7 +118,7 @@ const CARD_DEFS = {
     abilities: [
       { name: "Investida Abissal", cost: { mana: 2 }, text: "Cause 3 de dano.", action: "damage3", target: "enemyAny" },
       { name: "Maremoto Repentino", cost: { mana: 4 }, text: "Cause 2 de dano a todos os Pactos inimigos.", action: "enemyPactsDamage2" },
-      { name: "Cauda Oceânica", cost: { madness: 2 }, text: "Recebe +3 Ataque neste turno.", action: "selfAttack3" }
+      { name: "Cauda Oceânica", cost: { mana: 2 }, text: "Recebe +3 Ataque neste turno.", action: "selfAttack3" }
     ]
   },
   lysora: {
@@ -230,7 +230,7 @@ const CARD_DEFS = {
     cost: 10,
     attack: 10,
     health: 16,
-    exclusive: "Kael Drakar",
+    exclusive: "",
     image: "assets/primordials/trono_da_setima_chama.jpeg",
     imageFallbacks: [],
     effect: "Ao ser invocado, cause 3 de dano a todos os Pactos inimigos.",
@@ -247,13 +247,13 @@ const CARD_DEFS = {
     cost: 10,
     attack: 8,
     health: 20,
-    exclusive: "Nereia Val'Kora",
+    exclusive: "",
     image: "assets/primordials/o_coracao_do_abismo_infinito.jpeg",
     imageFallbacks: [],
     effect: "Ao ser invocado, congele um Pacto inimigo até o próximo turno.",
     abilities: [
       { name: "Marés Eternas", text: "Enquanto permanecer em campo, Pactos de Água aliados recebem +2 Vida." },
-      { name: "Canção das Profundezas", text: "Uma vez por turno, cure 2 de Vida do seu Herói.", action: "primordialHealHero2" }
+      { name: "Canção das Profundezas", text: "Uma vez por turno, cure 2 de Vida do seu Domador.", action: "primordialHealTamer2" }
     ]
   },
   chuvaBrasas: {
@@ -288,8 +288,8 @@ const CARD_DEFS = {
     cost: 4,
     image: "assets/spells/fire/ritual_da_setima_chama.png",
     imageFallbacks: [],
-    effect: "Compre 2 cartas e ganhe 1 Loucura.",
-    action: "draw2Madness1"
+    effect: "Compre 2 cartas e recupere 1 Mana.",
+    action: "draw2Mana1"
   },
   fornalhaInsaciavel: {
     key: "fornalhaInsaciavel",
@@ -389,8 +389,8 @@ const CARD_DEFS = {
     type: "event",
     element: "fire",
     cost: 1,
-    effect: "Ganhe 1 Loucura e compre 1 carta.",
-    action: "madness1Draw1"
+    effect: "Recupere 1 Mana e compre 1 carta.",
+    action: "mana1Draw1"
   },
   perolaAbissal: {
     key: "perolaAbissal",
@@ -408,41 +408,53 @@ const CARD_DEFS = {
     type: "event",
     element: "water",
     cost: 1,
-    effect: "Cure 2 de Vida do seu Herói e compre 1 carta.",
-    action: "healHero2Draw1"
+    effect: "Cure 2 de Vida do seu Domador e compre 1 carta.",
+    action: "healTamer2Draw1"
   }
 };
 
-const HEROES = {
-  fire: {
-    key: "kael",
-    heroName: "Kael Drakar",
-    title: "Rei das Chamas Eternas",
+const TAMERS = {
+  aeron: {
+    key: "aeron",
+    name: "Aeron Vhalor",
+    title: "O Mestre dos Pactos Perdidos",
+    type: "Domador",
     element: "fire",
     elementLabel: "Fogo",
-    style: "Agressão, dano e sacrifício",
+    style: "Identidade visual focada em pactos antigos.",
     maxLife: 25,
-    image: "assets/heroes/kael.jpeg",
-    imageFallbacks: [],
-    passiveName: "Chama do Conquistador",
-    passive: "Sempre que um Pacto de Fogo aliado destruir um Pacto inimigo, ele recebe +1 Ataque permanentemente.",
-    pacts: ["cinzamor", "varkhan", "ignivar"],
-    primordial: "tronoSetimaChama"
+    image: "assets/heroes/domador_1.jpeg",
+    icon: "assets/icons/icone_domador_1.jpeg",
+    imageFallbacks: []
   },
-  water: {
-    key: "nereia",
-    heroName: "Nereia Val'Kora",
-    title: "Mãe das Profundezas",
+  lyra: {
+    key: "lyra",
+    name: "Lyra Noctis",
+    title: "A Guardiã das Mil Feras",
+    type: "Domadora",
     element: "water",
     elementLabel: "Água",
-    style: "Cura, controle e resistência",
+    style: "Identidade visual focada em feras ancestrais.",
     maxLife: 25,
-    image: "assets/heroes/nereia.jpeg",
-    imageFallbacks: [],
-    passiveName: "Marés Eternas",
-    passive: "A primeira vez que você curar um aliado a cada turno, cure também 1 de Vida do seu Herói.",
+    image: "assets/heroes/domadora_1.jpeg",
+    icon: "assets/icons/icone_domadora_1.jpeg",
+    imageFallbacks: []
+  }
+};
+
+const PACT_KEYS = ["cinzamor", "varkhan", "ignivar", "thalora", "lysora", "nauren"];
+const PRIMORDIAL_KEYS = ["tronoSetimaChama", "coracaoAbismo"];
+
+const BOT_LOADOUTS = {
+  aeron: {
+    tamer: "lyra",
     pacts: ["thalora", "lysora", "nauren"],
     primordial: "coracaoAbismo"
+  },
+  lyra: {
+    tamer: "aeron",
+    pacts: ["cinzamor", "varkhan", "ignivar"],
+    primordial: "tronoSetimaChama"
   }
 };
 
@@ -473,8 +485,10 @@ const DECK_RECIPES = {
 
 const state = {
   screen: "menu",
+  humanTamerKey: null,
   humanElement: null,
   selectedPactKeys: [],
+  selectedPrimordialKey: null,
   selectedCardId: null,
   selectedHandCardId: null,
   players: [],
@@ -490,7 +504,8 @@ const state = {
   floatingPanel: null,
   swapFlash: null,
   activeGlow: null,
-  visualFlash: null
+  visualFlash: null,
+  animatingAttack: false
 };
 
 const screens = {
@@ -570,33 +585,59 @@ function createCard(cardKey) {
   };
 }
 
-function createHeroCard(player) {
-  const hero = HEROES[player.element];
-
+function createTamerCard(player) {
   return {
-    key: hero.key,
-    name: hero.heroName,
-    type: "hero",
-    element: hero.element,
-    title: hero.title,
-    image: hero.image,
-    imageFallbacks: hero.imageFallbacks,
-    baseHealth: hero.maxLife,
+    key: player.tamerKey,
+    name: player.tamerName,
+    type: "tamer",
+    element: player.element,
+    title: player.tamerTitle,
+    image: player.tamerImage,
+    imageFallbacks: player.tamerImageFallbacks,
+    baseHealth: player.maxLife,
     currentHealth: player.life,
-    passiveName: hero.passiveName,
-    passive: hero.passive,
-    effect: hero.passive
+    effect: "Identidade visual do jogador. Domadores não atacam, não usam habilidades e não ocupam slot no campo."
   };
 }
 
-function createDeck(element) {
-  const deck = [];
-
-  DECK_RECIPES[element].forEach(([cardKey, copies]) => {
-    for (let copy = 0; copy < copies; copy += 1) {
-      deck.push(createCard(cardKey));
+function createDeckForLoadout(pactKeys, primordialKey) {
+  const elementSet = new Set();
+  pactKeys.forEach((pactKey) => {
+    const card = CARD_DEFS[pactKey];
+    if (card && DECK_RECIPES[card.element]) {
+      elementSet.add(card.element);
     }
   });
+
+  const primordial = CARD_DEFS[primordialKey];
+  if (primordial && DECK_RECIPES[primordial.element]) {
+    elementSet.add(primordial.element);
+  }
+
+  const elements = [...elementSet];
+  if (elements.length === 0) {
+    elements.push("fire", "water");
+  }
+
+  const queues = elements.map((element) => {
+    const cards = [];
+    DECK_RECIPES[element].forEach(([cardKey, copies]) => {
+      for (let copy = 0; copy < copies; copy += 1) {
+        cards.push(cardKey);
+      }
+    });
+    return cards;
+  });
+
+  const deck = [];
+  let cursor = 0;
+  while (deck.length < DECK_SIZE && queues.some((queue) => queue.length > 0)) {
+    const queue = queues[cursor % queues.length];
+    if (queue.length > 0) {
+      deck.push(createCard(queue.shift()));
+    }
+    cursor += 1;
+  }
 
   return shuffleDeck(deck);
 }
@@ -615,9 +656,12 @@ function shuffleDeck(deck) {
 function startGame() {
   state.battleId += 1;
   state.screen = "menu";
+  state.humanTamerKey = null;
+  state.humanElement = null;
   state.players = [];
   state.activePlayerIndex = 0;
   state.selectedPactKeys = [];
+  state.selectedPrimordialKey = null;
   state.selectedCardId = null;
   state.selectedHandCardId = null;
   state.selectedAttackerId = null;
@@ -631,19 +675,27 @@ function startGame() {
   state.swapFlash = null;
   state.activeGlow = null;
   state.visualFlash = null;
+  state.animatingAttack = false;
   closeCardModal();
   updateUI();
 }
 
-function selectHero(element) {
-  state.humanElement = element;
-  state.selectedPactKeys = [...HEROES[element].pacts];
+function selectTamer(tamerKey) {
+  const tamer = TAMERS[tamerKey];
+  if (!tamer) {
+    return;
+  }
+
+  state.humanTamerKey = tamerKey;
+  state.humanElement = tamer.element;
+  state.selectedPactKeys = [];
+  state.selectedPrimordialKey = null;
   state.screen = "pact";
   updateUI();
 }
 
 function togglePactSelection(pactKey) {
-  if (!state.humanElement) {
+  if (!state.humanTamerKey || !PACT_KEYS.includes(pactKey)) {
     return;
   }
 
@@ -656,8 +708,17 @@ function togglePactSelection(pactKey) {
   renderPactSelection();
 }
 
+function selectPrimordial(primordialKey) {
+  if (!state.humanTamerKey || !PRIMORDIAL_KEYS.includes(primordialKey)) {
+    return;
+  }
+
+  state.selectedPrimordialKey = primordialKey;
+  renderPactSelection();
+}
+
 function confirmPactSelection() {
-  if (state.selectedPactKeys.length !== MAX_PACTS) {
+  if (state.selectedPactKeys.length !== MAX_PACTS || !state.selectedPrimordialKey || !state.humanTamerKey) {
     return;
   }
 
@@ -665,15 +726,17 @@ function confirmPactSelection() {
 }
 
 function startBattle() {
-  const humanElement = state.humanElement || "fire";
-  const botElement = humanElement === "fire" ? "water" : "fire";
+  const humanTamerKey = state.humanTamerKey || "aeron";
+  const botLoadout = BOT_LOADOUTS[humanTamerKey] || BOT_LOADOUTS.aeron;
+  const humanPacts = state.selectedPactKeys.length === MAX_PACTS ? state.selectedPactKeys : ["cinzamor", "varkhan", "thalora"];
+  const humanPrimordial = state.selectedPrimordialKey || "tronoSetimaChama";
 
   state.battleId += 1;
   nextCardId = 1;
   state.screen = "battle";
   state.players = [
-    buildPlayer(0, "human", humanElement, state.selectedPactKeys),
-    buildPlayer(1, "bot", botElement)
+    buildPlayer(0, "human", humanTamerKey, humanPacts, humanPrimordial),
+    buildPlayer(1, "bot", botLoadout.tamer, botLoadout.pacts, botLoadout.primordial)
   ];
   state.activePlayerIndex = 0;
   state.selectedAttackerId = null;
@@ -689,21 +752,23 @@ function startBattle() {
   state.selectedCardId = null;
   state.selectedHandCardId = null;
   state.visualFlash = null;
+  state.animatingAttack = false;
   closeCardModal();
 
   state.players.forEach((player) => {
     drawCard(player, STARTING_HAND, { silent: true });
-    logAction(`${player.heroName} comprou ${STARTING_HAND} cartas iniciais.`);
+    logAction(`${player.tamerName} comprou ${STARTING_HAND} cartas iniciais.`);
   });
 
-  logAction(`Você escolheu ${state.players[0].heroName}. O oponente usa ${state.players[1].heroName}.`);
+  logAction(`Você escolheu ${state.players[0].tamerName}. O oponente usa ${state.players[1].tamerName}.`);
   beginTurn(0);
 }
 
-function buildPlayer(index, role, element, pactKeys = null) {
-  const hero = HEROES[element];
-  const deck = createDeck(element);
-  const selectedPacts = pactKeys && pactKeys.length === MAX_PACTS ? pactKeys : hero.pacts;
+function buildPlayer(index, role, tamerKey, pactKeys = null, primordialKey = null) {
+  const tamer = TAMERS[tamerKey] || TAMERS.aeron;
+  const selectedPacts = pactKeys && pactKeys.length === MAX_PACTS ? pactKeys : ["cinzamor", "varkhan", "ignivar"];
+  const selectedPrimordial = primordialKey || "tronoSetimaChama";
+  const deck = createDeckForLoadout(selectedPacts, selectedPrimordial);
   const pacts = selectedPacts.map((pactKey, slot) => {
     const card = createCard(pactKey);
     card.ownerIndex = index;
@@ -711,7 +776,7 @@ function buildPlayer(index, role, element, pactKeys = null) {
     card.currentHealth = getBaseCardHealth(card);
     return card;
   });
-  const primordial = createCard(hero.primordial);
+  const primordial = createCard(selectedPrimordial);
   primordial.ownerIndex = index;
 
   deck.forEach((card) => {
@@ -722,20 +787,20 @@ function buildPlayer(index, role, element, pactKeys = null) {
     index,
     role,
     label: role === "human" ? "Jogador" : "Oponente",
-    element,
-    elementLabel: hero.elementLabel,
-    deckStyle: hero.style,
-    heroName: hero.heroName,
-    heroTitle: hero.title,
-    heroImage: hero.image,
-    heroImageFallbacks: hero.imageFallbacks,
-    passiveName: hero.passiveName,
-    passive: hero.passive,
-    life: hero.maxLife,
-    maxLife: hero.maxLife,
+    tamerKey: tamer.key,
+    element: tamer.element,
+    elementLabel: tamer.elementLabel,
+    deckStyle: tamer.style,
+    tamerName: tamer.name,
+    tamerTitle: tamer.title,
+    tamerType: tamer.type,
+    tamerImage: tamer.image,
+    tamerIcon: tamer.icon,
+    tamerImageFallbacks: tamer.imageFallbacks,
+    life: tamer.maxLife,
+    maxLife: tamer.maxLife,
     manaMax: 0,
     mana: 0,
-    madness: 0,
     turnsTaken: 0,
     deck,
     hand: [],
@@ -839,61 +904,47 @@ function renderPlayerBoard(player, isOpponent) {
   return `
     <section class="duel-side ${sideClass} ${active} element-${player.element}" aria-label="${escapeHtml(player.label)}" data-board-side="${sideKey}">
       <div class="player-topline board-overlay-title ${sideClass}">
-        <strong>${escapeHtml(player.heroName)}</strong>
-        <span>${escapeHtml(player.heroTitle)}</span>
+        <strong>${escapeHtml(player.tamerName)}</strong>
+        <span>${escapeHtml(player.tamerTitle)}</span>
       </div>
+      ${renderTamerHud(player, sideKey)}
       <div class="duel-grid">
-        ${renderHeroSlot(player, sideKey)}
-        <div class="pact-lane" aria-label="Pactos de ${escapeHtml(player.heroName)}">
+        <div class="pact-lane" aria-label="Pactos de ${escapeHtml(player.tamerName)}">
           ${player.pacts.map((card, slot) => renderPactSlot(player, card, slot, sideKey)).join("")}
         </div>
         ${renderRealmSlot(player, sideKey)}
         ${renderPrimordialSlot(player, sideKey)}
-        ${renderPileSlots(player, sideKey)}
       </div>
-      ${renderResourceStrip(player, sideKey)}
       ${hand}
     </section>
   `;
 }
 
-function renderResourceStrip(player, sideKey) {
-  const slot = getBoardSlot(sideKey, "recursos");
-  const label = player.role === "human" ? "Seus recursos" : "Recursos do oponente";
-  const flash = getVisualFlashClass({ type: "hand", playerIndex: player.index });
-  const items = [
-    renderIconStat("vida", `${player.life}/${player.maxLife}`, "Vida", "Vida do Heroi"),
-    renderIconStat("mana", `${player.mana}/${player.manaMax}`, "Mana", "Mana atual e maxima"),
-    renderIconStat("loucura", player.madness, "Loucura", "Loucura acumulada"),
-    renderIconStat("deck", player.deck.length, "Deck", "Cartas restantes no deck"),
-    renderIconStat("abismo", player.discard.length, "Abismo", "Cartas no descarte"),
-    renderIconStat("dominio", player.dominioEsquecido.length, "Dominio Esquecido", "Cartas no Dominio Esquecido")
-  ].join("");
+function renderTamerHud(player, sideKey) {
+  const slot = getBoardSlot(sideKey, "hud");
+  const targetable = isTargetable({ type: "tamer", playerIndex: player.index, player });
+  const directTarget = canTamerReceiveAttack(player);
+  const flash = getVisualFlashClass({ type: "tamer", playerIndex: player.index });
+  const label = player.role === "human" ? "HUD do jogador" : "HUD do oponente";
 
   return `
-    <div class="resource-strip ${flash}" style="${slotStyle(slot)}" aria-label="${escapeHtml(label)}">
-      ${items}
-    </div>
-  `;
-}
-
-function renderHeroSlot(player, sideKey) {
-  const heroCard = createHeroCard(player);
-  const targetable = isTargetable({ type: "hero", playerIndex: player.index, player });
-  const directTarget = canHeroReceiveAttack(player);
-  const flash = getVisualFlashClass({ type: "hero", playerIndex: player.index });
-
-  return `
-    <button type="button" class="board-slot hero-slot ${flash} ${targetable ? "targetable" : ""} ${directTarget ? "attack-target" : ""}"
-      style="${slotStyle(getBoardSlot(sideKey, "heroi"))}" data-hero-index="${player.index}" data-detail-type="hero" data-detail-player-index="${player.index}"
-      ${tooltipAttr(`${player.heroName}: ${player.life}/${player.maxLife} Vida | Mana ${player.mana}/${player.manaMax} | Loucura ${player.madness}`)}>
-      <div class="slot-label">Herói</div>
-      ${renderCardArt(heroCard, "hero-art")}
-      <div class="slot-card-copy hero-card-stats">
-        <span>${renderIconStat("vida", `${player.life}/${player.maxLife}`, "Vida")}</span>
-        <span>${renderIconStat("mana", `${player.mana}/${player.manaMax}`, "Mana")}</span>
-        <span>${renderIconStat("loucura", player.madness, "Loucura")}</span>
-      </div>
+    <button type="button" class="tamer-hud ${player.role === "human" ? "human-tamer-hud" : "opponent-tamer-hud"} ${flash} ${targetable ? "targetable" : ""} ${directTarget ? "attack-target" : ""}"
+      style="${slotStyle(slot)}" data-tamer-index="${player.index}" data-detail-type="tamer" data-detail-player-index="${player.index}"
+      aria-label="${escapeHtml(label)}" ${tooltipAttr("Domador: avatar e vida do jogador. Não ataca e não possui habilidades.")}>
+      <span class="tamer-avatar">
+        <img src="${escapeHtml(player.tamerIcon || player.tamerImage)}" alt="${escapeHtml(player.tamerName)}" onerror="fallbackImage(this)">
+      </span>
+      <span class="tamer-hud-copy">
+        <span class="tamer-name">${escapeHtml(player.tamerName)}</span>
+        <span class="tamer-title">${escapeHtml(player.tamerTitle)}</span>
+        <span class="tamer-stat-row">
+          ${renderIconStat("vida", `${player.life}/${player.maxLife}`, "Sangue")}
+          ${renderIconStat("mana", `${player.mana}/${player.manaMax}`, "Mana")}
+          ${renderIconStat("deck", player.deck.length, "Deck")}
+          ${renderIconStat("abismo", player.discard.length, "Abismo")}
+          ${renderIconStat("dominio", player.dominioEsquecido.length, "Domínio")}
+        </span>
+      </span>
     </button>
   `;
 }
@@ -946,6 +997,10 @@ function renderPactSlot(player, card, slot, sideKey) {
           ${taunt ? "<span>Provocação</span>" : ""}
         </span>
       </button>
+      <div class="field-stat-plate" aria-label="Ataque e vida de ${escapeHtml(card.name)}">
+        ${renderIconStat("ataque", getAttack(card), "Ataque")}
+        ${renderIconStat("vida_pacto", `${card.currentHealth}/${getMaxHealth(card)}`, "Vida")}
+      </div>
       ${canSwap ? `<button type="button" class="slot-action swap-action" data-swap-slot="${slot}">Trocar</button>` : ""}
       ${renderAbilityBar(player, card, isActive)}
     </div>
@@ -1122,7 +1177,6 @@ function renderDeckLists() {
   }
 
   deckLists.innerHTML = Object.entries(DECK_RECIPES).map(([element, recipe]) => {
-    const hero = HEROES[element];
     const rows = recipe.map(([cardKey, copies]) => {
       const card = CARD_DEFS[cardKey];
       return `
@@ -1139,8 +1193,8 @@ function renderDeckLists() {
 
     return `
       <article class="deck-column element-${element}">
-        <h3>${escapeHtml(hero.heroName)}</h3>
-        <p>${DECK_SIZE} cartas · sem Heróis, Pactos ou Primordiais · até 2 cópias.</p>
+        <h3>Pacote ${escapeHtml(ELEMENT_LABELS[element])}</h3>
+        <p>${DECK_SIZE} cartas · sem Domadores, Pactos ou Primordiais · até 2 cópias.</p>
         <div class="deck-list">${rows}</div>
       </article>
     `;
@@ -1148,12 +1202,12 @@ function renderDeckLists() {
 }
 
 function renderPactSelection() {
-  if (!pactSelectionContent || !confirmPactsButton || !state.humanElement) {
+  if (!pactSelectionContent || !confirmPactsButton || !state.humanTamerKey) {
     return;
   }
 
-  const hero = HEROES[state.humanElement];
-  const cards = hero.pacts.map((pactKey) => {
+  const tamer = TAMERS[state.humanTamerKey];
+  const pactCards = PACT_KEYS.map((pactKey) => {
     const card = CARD_DEFS[pactKey];
     const selected = state.selectedPactKeys.includes(pactKey);
 
@@ -1172,17 +1226,43 @@ function renderPactSelection() {
       </button>
     `;
   }).join("");
+  const primordialCards = PRIMORDIAL_KEYS.map((primordialKey) => {
+    const card = CARD_DEFS[primordialKey];
+    const selected = state.selectedPrimordialKey === primordialKey;
+
+    return `
+      <button type="button" class="pact-choice-card primordial-choice-card element-${card.element} ${selected ? "selected-pact" : ""}"
+        data-select-primordial="${escapeHtml(primordialKey)}" data-detail-type="card-key" data-detail-card-key="${escapeHtml(primordialKey)}">
+        ${renderCardArt(card, "pact-choice-art")}
+        <span>
+          <strong>${escapeHtml(card.name)}</strong>
+          <small>${escapeHtml(ELEMENT_LABELS[card.element])} · ${renderPlainCost(card.cost || 0)}</small>
+        </span>
+        <span class="card-stats">
+          ${renderIconStat("ataque", card.attack, "Ataque")}
+          ${renderIconStat("vida_pacto", card.health, "Vida")}
+        </span>
+      </button>
+    `;
+  }).join("");
 
   pactSelectionContent.innerHTML = `
     <article class="pact-selection-copy">
-      <p class="eyebrow">${escapeHtml(hero.heroName)}</p>
-      <h3>${escapeHtml(hero.title)}</h3>
-      <p>Selecione exatamente 3 Pactos para iniciar a partida.</p>
-      <strong>${state.selectedPactKeys.length}/3 selecionados</strong>
+      <p class="eyebrow">${escapeHtml(tamer.type)}</p>
+      <h3>${escapeHtml(tamer.name)}</h3>
+      <p>${escapeHtml(tamer.title)}</p>
+      <strong>${state.selectedPactKeys.length}/3 Pactos · ${state.selectedPrimordialKey ? "1/1 Primordial" : "0/1 Primordial"}</strong>
     </article>
-    ${cards}
+    <section class="selection-section">
+      <h3>Pactos Disponíveis</h3>
+      <div class="selection-card-grid">${pactCards}</div>
+    </section>
+    <section class="selection-section">
+      <h3>Pacto Primordial</h3>
+      <div class="selection-card-grid primordial-selection-grid">${primordialCards}</div>
+    </section>
   `;
-  confirmPactsButton.disabled = state.selectedPactKeys.length !== MAX_PACTS;
+  confirmPactsButton.disabled = state.selectedPactKeys.length !== MAX_PACTS || !state.selectedPrimordialKey;
 }
 
 function renderCardArt(card, className = "") {
@@ -1304,8 +1384,8 @@ function beginTurn(playerIndex) {
   }
 
   drawCard(player, 1);
-  logAction(`Começou o turno de ${player.heroName}. Mana ${player.mana}/${player.manaMax}.`);
-  state.statusMessage = player.role === "human" ? `Seu turno com ${player.heroName}.` : "O oponente está pensando...";
+  logAction(`Começou o turno de ${player.tamerName}. Mana ${player.mana}/${player.manaMax}.`);
+  state.statusMessage = player.role === "human" ? `Seu turno com ${player.tamerName}.` : "O oponente está pensando...";
   updateUI();
   flashTurnSplash(player.role === "human" ? "Seu Turno" : "Turno do Oponente");
 
@@ -1354,7 +1434,7 @@ function drawCard(player, amount = 1, options = {}) {
   for (let count = 0; count < amount; count += 1) {
     if (player.deck.length === 0) {
       if (!options.silent) {
-        logAction(`${player.heroName} tentou comprar, mas o deck está vazio.`);
+        logAction(`${player.tamerName} tentou comprar, mas o deck está vazio.`);
       }
       break;
     }
@@ -1366,7 +1446,7 @@ function drawCard(player, amount = 1, options = {}) {
   }
 
   if (drawn > 0 && !options.silent) {
-    logAction(`${player.heroName} comprou ${drawn} ${drawn === 1 ? "carta" : "cartas"}.`);
+    logAction(`${player.tamerName} comprou ${drawn} ${drawn === 1 ? "carta" : "cartas"}.`);
     markVisualFlash({ type: "hand", playerIndex: player.index, kind: "draw" });
     showBattleFeedback(`+${drawn} carta${drawn === 1 ? "" : "s"}`, "effect-draw");
   }
@@ -1426,7 +1506,7 @@ function playCardWithTarget(player, handIndex, target) {
   player.discard.push(card);
   state.selectedCardId = null;
   state.selectedHandCardId = null;
-  logAction(`${player.heroName} jogou ${card.name}.`);
+  logAction(`${player.tamerName} jogou ${card.name}.`);
   showBattleFeedback(card.name, "effect-summon");
   resolvePlayedCard(player, card, target);
   checkGameOver();
@@ -1470,10 +1550,10 @@ function resolvePlayedCard(player, card, target) {
       addTemporaryAttack(target.card, 3);
       logAction(`${target.card.name} recebeu +3 Ataque neste turno.`);
       break;
-    case "draw2Madness1":
-      player.madness += 1;
+    case "draw2Mana1":
       drawCard(player, 2);
-      logAction(`${player.heroName} ganhou 1 Loucura.`);
+      player.mana = Math.min(player.manaMax, player.mana + 1);
+      logAction(`${player.tamerName} recuperou 1 Mana.`);
       break;
     case "draw2":
       drawCard(player, 2);
@@ -1481,7 +1561,7 @@ function resolvePlayedCard(player, card, target) {
     case "destroyAllyGainMana3":
       destroyPact(target.card, card, { sacrifice: true });
       player.mana = Math.min(player.manaMax, player.mana + 3);
-      logAction(`${player.heroName} recuperou 3 Mana.`);
+      logAction(`${player.tamerName} recuperou 3 Mana.`);
       break;
     case "enemyPactsDamage3":
       damageAllEnemyPacts(player, 3, card);
@@ -1499,18 +1579,18 @@ function resolvePlayedCard(player, card, target) {
       target.card.permanentAttack += 1;
       logAction(`${target.card.name} recebeu +1 Ataque permanente.`);
       break;
-    case "madness1Draw1":
-      player.madness += 1;
+    case "mana1Draw1":
+      player.mana = Math.min(player.manaMax, player.mana + 1);
       drawCard(player, 1);
-      logAction(`${player.heroName} ganhou 1 Loucura.`);
+      logAction(`${player.tamerName} recuperou 1 Mana.`);
       break;
     case "equipHealth1Heal2":
       target.card.permanentHealth += 1;
       healPact(target.card, 2, player);
       logAction(`${target.card.name} recebeu +1 Vida permanente.`);
       break;
-    case "healHero2Draw1":
-      healHero(player, 2);
+    case "healTamer2Draw1":
+      healTamer(player, 2);
       drawCard(player, 1);
       break;
     default:
@@ -1522,7 +1602,7 @@ function setRealm(player, card) {
   const realm = createCard(card.key);
   realm.ownerIndex = player.index;
   player.realm = realm;
-  logAction(`${player.heroName} ativou o Reino ${realm.name}.`);
+  logAction(`${player.tamerName} ativou o Reino ${realm.name}.`);
   showBattleFeedback("Reino ativado", "effect-summon");
   clampAllPacts();
 }
@@ -1533,7 +1613,7 @@ function canPlayCard(player, card) {
     !state.pendingTarget &&
     card &&
     card.type !== "pact" &&
-    card.type !== "hero" &&
+    card.type !== "tamer" &&
     card.type !== "primordial" &&
     player.mana >= card.cost
   );
@@ -1662,7 +1742,6 @@ function payAbilityCost(player, card, ability) {
   }
 
   player.mana -= cost.mana || 0;
-  player.madness -= cost.madness || 0;
   player.life -= cost.blood || 0;
 
   if (ability.cost && ability.cost.mana && cost.mana < ability.cost.mana) {
@@ -1675,7 +1754,6 @@ function payAbilityCost(player, card, ability) {
 function hasResources(player, cost) {
   return (
     player.mana >= (cost.mana || 0) &&
-    player.madness >= (cost.madness || 0) &&
     player.life > (cost.blood || 0)
   );
 }
@@ -1685,20 +1763,21 @@ function formatCost(cost) {
   if (cost.mana) {
     parts.push(`${cost.mana} Mana`);
   }
-  if (cost.madness) {
-    parts.push(`${cost.madness} Loucura`);
-  }
   if (cost.blood) {
     parts.push(`${cost.blood} Sangue`);
   }
   return parts.join(" · ") || "0";
 }
 
-function attack(attackerRef, defenderRef) {
+async function attack(attackerRef, defenderRef) {
+  if (state.animatingAttack) {
+    return false;
+  }
+
   const attackerLocation = getPactLocation(attackerRef.cardId);
 
   if (!attackerLocation) {
-    return;
+    return false;
   }
 
   const attacker = attackerLocation.card;
@@ -1706,28 +1785,35 @@ function attack(attackerRef, defenderRef) {
 
   if (!canAttack(attacker)) {
     showMessage(`${attacker.name} não pode atacar agora.`);
-    return;
+    return false;
   }
 
   const opponent = getOpponent(owner.index);
   const tauntTarget = getTauntTarget(opponent);
   if (tauntTarget && defenderRef.cardId !== tauntTarget.id) {
     showMessage(`Provocação obriga o ataque contra ${tauntTarget.name}.`);
-    return;
+    return false;
   }
 
   attacker.hasAttacked = true;
+  state.animatingAttack = true;
+  state.selectedAttackerId = null;
   markVisualFlash({ type: "card", cardId: attacker.id, kind: "attack" });
   showBattleFeedback("Ataque", "effect-attack");
+  updateUI();
 
-  if (defenderRef.type === "hero") {
+  await runAttackAnimation(attacker.id, defenderRef);
+
+  if (defenderRef.type === "tamer") {
     const defender = state.players[defenderRef.playerIndex];
-    damageHero(defender, getAttack(attacker), attacker);
-    logAction(`${attacker.name} atacou ${defender.heroName}.`);
+    damageTamer(defender, getAttack(attacker), attacker);
+    logAction(`${attacker.name} atacou ${defender.tamerName}.`);
   } else {
     const defenderLocation = getPactLocation(defenderRef.cardId);
     if (!defenderLocation) {
-      return;
+      state.animatingAttack = false;
+      updateUI();
+      return false;
     }
 
     const defender = defenderLocation.card;
@@ -1741,9 +1827,10 @@ function attack(attackerRef, defenderRef) {
     logAction(`${attacker.name} atacou ${defender.name}.`);
   }
 
-  state.selectedAttackerId = null;
+  state.animatingAttack = false;
   checkGameOver();
   updateUI();
+  return true;
 }
 
 function canAttack(card) {
@@ -1756,13 +1843,14 @@ function canAttack(card) {
     card.ownerIndex === state.activePlayerIndex &&
     !card.hasAttacked &&
     !state.pendingTarget &&
+    !state.animatingAttack &&
     !isFrozen(card) &&
     !state.gameOver &&
     (state.players[state.activePlayerIndex].role === "human" || state.botThinking)
   );
 }
 
-function canHeroReceiveAttack(player) {
+function canTamerReceiveAttack(player) {
   return Boolean(
     state.selectedAttackerId &&
     player.index !== state.activePlayerIndex &&
@@ -1770,8 +1858,8 @@ function canHeroReceiveAttack(player) {
   );
 }
 
-function canHeroBeDirectTarget(player) {
-  return canHeroReceiveAttack(player);
+function canTamerBeDirectTarget(player) {
+  return canTamerReceiveAttack(player);
 }
 
 function canHumanSwap(player, slot) {
@@ -1796,7 +1884,7 @@ function swapPact(player, slot) {
   player.swappedThisTurn = true;
   state.swapFlash = { playerIndex: player.index, slot };
   state.activeGlow = { playerIndex: player.index, slot: ACTIVE_SLOT };
-  logAction(`${player.heroName} trocou o Pacto Ativo.`);
+  logAction(`${player.tamerName} trocou o Pacto Ativo.`);
   showBattleFeedback("Pacto Ativo trocado", "effect-turn-banner");
   showMessage(`${player.pacts[ACTIVE_SLOT].name} é o novo Pacto Ativo.`);
   window.setTimeout(() => {
@@ -1834,7 +1922,7 @@ function botSwapIfUseful(bot) {
   [bot.pacts[ACTIVE_SLOT], bot.pacts[chosenSlot]] = [bot.pacts[chosenSlot], bot.pacts[ACTIVE_SLOT]];
   refreshPactSlots(bot);
   bot.swappedThisTurn = true;
-  logAction(`${bot.heroName} trocou o Pacto Ativo.`);
+  logAction(`${bot.tamerName} trocou o Pacto Ativo.`);
   showBattleFeedback("Pacto Ativo trocado", "effect-turn-banner");
   return true;
 }
@@ -1885,7 +1973,7 @@ function handleFieldClick(playerIndex, slot) {
   attack({ cardId: state.selectedAttackerId }, { type: "pact", cardId: card.id });
 }
 
-function handleHeroClick(playerIndex) {
+function handleTamerClick(playerIndex) {
   const player = state.players[playerIndex];
 
   if (!player) {
@@ -1893,7 +1981,7 @@ function handleHeroClick(playerIndex) {
   }
 
   if (state.pendingTarget) {
-    resolvePendingTarget({ type: "hero", playerIndex, player });
+    resolvePendingTarget({ type: "tamer", playerIndex, player });
     return;
   }
 
@@ -1901,12 +1989,12 @@ function handleHeroClick(playerIndex) {
     return;
   }
 
-  if (!canHeroBeDirectTarget(player)) {
+  if (!canTamerBeDirectTarget(player)) {
     showMessage("Há uma Provocação impedindo esse ataque.");
     return;
   }
 
-  attack({ cardId: state.selectedAttackerId }, { type: "hero", playerIndex });
+  attack({ cardId: state.selectedAttackerId }, { type: "tamer", playerIndex });
 }
 
 function handlePrimordialClick(playerIndex) {
@@ -1949,7 +2037,7 @@ function invokePrimordial(player, target = null) {
   player.mana -= player.primordial.cost;
   player.primordialInvoked = true;
   player.primordial.currentHealth = getMaxHealth(player.primordial);
-  logAction(`${player.heroName} invocou ${player.primordial.name}.`);
+  logAction(`${player.tamerName} invocou ${player.primordial.name}.`);
   flashTurnSplash("Primordial Invocado");
   showBattleFeedback("Primordial invocado", "effect-primordial-ready");
 
@@ -2004,8 +2092,8 @@ function resolvePrimordialAbility(player, ability, target) {
     dealDamageToTarget(target, 2, player.primordial);
   }
 
-  if (ability.action === "primordialHealHero2") {
-    healHero(player, 2);
+  if (ability.action === "primordialHealTamer2") {
+    healTamer(player, 2);
   }
 
   checkGameOver();
@@ -2076,7 +2164,7 @@ function isValidTargetForRule(player, rule, target) {
 
   switch (rule) {
     case "enemyAny":
-      return target.playerIndex === opponent.index && (target.type === "pact" || target.type === "hero");
+      return target.playerIndex === opponent.index && (target.type === "pact" || target.type === "tamer");
     case "enemyPact":
     case "enemyPactOptional":
       return target.playerIndex === opponent.index && target.type === "pact" && Boolean(target.card);
@@ -2092,7 +2180,7 @@ function getAllTargets() {
   const targets = [];
 
   state.players.forEach((player) => {
-    targets.push({ type: "hero", playerIndex: player.index, player });
+    targets.push({ type: "tamer", playerIndex: player.index, player });
     player.pacts.forEach((card, slot) => {
       if (card) {
         targets.push({ type: "pact", playerIndex: player.index, slot, card });
@@ -2108,8 +2196,8 @@ function dealDamageToTarget(target, amount, source) {
     return;
   }
 
-  if (target.type === "hero") {
-    damageHero(state.players[target.playerIndex], amount, source);
+  if (target.type === "tamer") {
+    damageTamer(state.players[target.playerIndex], amount, source);
   }
 
   if (target.type === "pact") {
@@ -2139,6 +2227,7 @@ function damagePact(card, amount, source) {
   const finalDamage = Math.max(0, amount - reduction);
   card.currentHealth -= finalDamage;
   markVisualFlash({ type: "card", cardId: card.id, kind: "damage" });
+  showFloatingText(getCardElement(card.id), `-${finalDamage}`, "damage");
   showBattleFeedback(`-${finalDamage}`, "effect-damage");
   logAction(`${card.name} recebeu ${finalDamage} de dano${reduction ? " após redução" : ""}.`);
 
@@ -2193,6 +2282,7 @@ function healPact(card, amount, healer) {
 
   if (healed > 0) {
     markVisualFlash({ type: "card", cardId: card.id, kind: "heal" });
+    showFloatingText(getCardElement(card.id), `+${healed}`, "heal");
     showBattleFeedback(`+${healed}`, "effect-heal");
     logAction(`${card.name} curou ${healed} de Vida.`);
     handleAllyHealed(state.players[location.playerIndex], healer);
@@ -2202,12 +2292,6 @@ function healPact(card, amount, healer) {
 }
 
 function handleAllyHealed(owner, healer) {
-  if (owner.element === "water" && !owner.healedAllyThisTurn) {
-    owner.healedAllyThisTurn = true;
-    healHero(owner, 1);
-    logAction("Marés Eternas curou 1 de Vida do Herói.");
-  }
-
   if (owner.realm && owner.realm.key === "mareProfunda" && !owner.realmHealDrawnThisTurn) {
     owner.realmHealDrawnThisTurn = true;
     drawCard(owner, 1);
@@ -2215,23 +2299,25 @@ function handleAllyHealed(owner, healer) {
   }
 }
 
-function healHero(player, amount) {
+function healTamer(player, amount) {
   const before = player.life;
   player.life = Math.min(player.maxLife, player.life + amount);
   const healed = player.life - before;
   if (healed > 0) {
-    markVisualFlash({ type: "hero", playerIndex: player.index, kind: "heal" });
+    markVisualFlash({ type: "tamer", playerIndex: player.index, kind: "heal" });
+    showFloatingText(getTamerElement(player.index), `+${healed}`, "heal");
     showBattleFeedback(`+${healed}`, "effect-heal");
-    logAction(`${player.heroName} curou ${healed} de Vida.`);
+    logAction(`${player.tamerName} curou ${healed} de Vida.`);
   }
   return healed;
 }
 
-function damageHero(player, amount, source) {
+function damageTamer(player, amount, source) {
   player.life = Math.max(0, player.life - amount);
-  markVisualFlash({ type: "hero", playerIndex: player.index, kind: "damage" });
+  markVisualFlash({ type: "tamer", playerIndex: player.index, kind: "damage" });
+  showFloatingText(getTamerElement(player.index), `-${amount}`, "damage");
   showBattleFeedback(`-${amount}`, "effect-damage");
-  logAction(`${player.heroName} recebeu ${amount} de dano.`);
+  logAction(`${player.tamerName} recebeu ${amount} de dano.`);
   checkGameOver();
 }
 
@@ -2243,6 +2329,7 @@ function freezePact(card) {
   const owner = state.players[location.playerIndex];
   card.frozenUntilTurn = owner.turnsTaken + 1;
   markVisualFlash({ type: "card", cardId: card.id, kind: "freeze" });
+  showFloatingText(getCardElement(card.id), "Congelado", "debuff");
   showBattleFeedback("Congelado", "effect-freeze");
   logAction(`${card.name} foi congelado até o próximo turno.`);
 }
@@ -2250,6 +2337,7 @@ function freezePact(card) {
 function addTemporaryAttack(card, amount) {
   card.temporaryAttack += amount;
   markVisualFlash({ type: "card", cardId: card.id, kind: "attack" });
+  showFloatingText(getCardElement(card.id), `+${amount} Ataque`, "buff");
   showBattleFeedback(`+${amount} Ataque`, "effect-attack");
   logAction(`${card.name} recebeu +${amount} Ataque neste turno.`);
 }
@@ -2258,6 +2346,7 @@ function addTemporaryHealth(card, amount) {
   card.temporaryHealth += amount;
   card.currentHealth += amount;
   markVisualFlash({ type: "card", cardId: card.id, kind: "heal" });
+  showFloatingText(getCardElement(card.id), `+${amount} Vida`, "heal");
   showBattleFeedback(`+${amount} Vida`, "effect-heal");
   logAction(`${card.name} recebeu +${amount} Vida temporária.`);
 }
@@ -2376,6 +2465,7 @@ function canHumanAct() {
     state.players.length > 0 &&
     !state.gameOver &&
     !state.botThinking &&
+    !state.animatingAttack &&
     state.activePlayerIndex === 0 &&
     state.players[0].role === "human"
   );
@@ -2391,7 +2481,7 @@ function endTurn() {
   state.selectedAttackerId = null;
   state.selectedCardId = null;
   state.selectedHandCardId = null;
-  logAction(`${player.heroName} encerrou o turno.`);
+  logAction(`${player.tamerName} encerrou o turno.`);
   beginTurn(getOpponent(player.index).index);
 }
 
@@ -2435,7 +2525,7 @@ async function botTurn(battleId = state.battleId) {
   if (attacker && canAttack(attacker)) {
     const target = chooseBotAttackTarget(bot, attacker);
     if (target) {
-      attack({ cardId: attacker.id }, target);
+      await attack({ cardId: attacker.id }, target);
       await sleep(260);
     }
   }
@@ -2444,7 +2534,7 @@ async function botTurn(battleId = state.battleId) {
 
   if (!state.gameOver && isSameBotTurn(bot, battleId)) {
     expireEndOfTurnEffects(bot);
-    logAction(`${bot.heroName} encerrou o turno.`);
+    logAction(`${bot.tamerName} encerrou o turno.`);
     beginTurn(0);
   }
 }
@@ -2473,7 +2563,7 @@ function playBotCards(bot) {
     bot.mana -= card.cost;
     bot.hand.splice(index, 1);
     bot.discard.push(card);
-    logAction(`${bot.heroName} jogou ${card.name}.`);
+    logAction(`${bot.tamerName} jogou ${card.name}.`);
     resolvePlayedCard(bot, card, target);
     played = true;
   }
@@ -2566,7 +2656,7 @@ function chooseBotAttackTarget(bot, attacker) {
 
   const enemies = opponent.pacts.filter(Boolean);
   if (enemies.length === 0 || opponent.life <= getAttack(attacker)) {
-    return { type: "hero", playerIndex: opponent.index };
+    return { type: "tamer", playerIndex: opponent.index };
   }
 
   const killable = enemies
@@ -2574,7 +2664,7 @@ function chooseBotAttackTarget(bot, attacker) {
     .sort((a, b) => getAttack(b) - getAttack(a))[0];
 
   const target = killable || enemies.sort((a, b) => getAttack(b) - getAttack(a))[0];
-  return target ? { type: "pact", cardId: target.id } : { type: "hero", playerIndex: opponent.index };
+  return target ? { type: "pact", cardId: target.id } : { type: "tamer", playerIndex: opponent.index };
 }
 
 function chooseTargetForRule(player, rule) {
@@ -2595,7 +2685,7 @@ function chooseTargetForRule(player, rule) {
   if (rule === "enemyAny") {
     const opponent = getOpponent(player.index);
     if (opponent.life <= 5) {
-      return { type: "hero", playerIndex: opponent.index, player: opponent };
+      return { type: "tamer", playerIndex: opponent.index, player: opponent };
     }
   }
 
@@ -2631,9 +2721,9 @@ function checkGameOver() {
   state.screen = "result";
 
   if (defeated.life <= 0) {
-    state.statusMessage = `${defeated.heroName} ficou sem Vida.`;
+    state.statusMessage = `${defeated.tamerName} ficou sem Vida.`;
   } else {
-    state.statusMessage = `${defeated.heroName} perdeu seus 3 Pactos.`;
+    state.statusMessage = `${defeated.tamerName} perdeu seus 3 Pactos.`;
   }
 
   logAction(state.statusMessage);
@@ -2683,6 +2773,99 @@ function showBattleFeedback(message, className = "") {
   window.setTimeout(() => {
     feedback.remove();
   }, 920);
+}
+
+function getCardElement(cardId) {
+  return document.querySelector(`[data-detail-card-id="${cardId}"]`);
+}
+
+function getTamerElement(playerIndex) {
+  return document.querySelector(`[data-tamer-index="${playerIndex}"]`);
+}
+
+function getAttackTargetElement(defenderRef) {
+  if (!defenderRef) {
+    return null;
+  }
+
+  if (defenderRef.type === "tamer") {
+    return getTamerElement(defenderRef.playerIndex);
+  }
+
+  if (defenderRef.type === "pact") {
+    return getCardElement(defenderRef.cardId);
+  }
+
+  return null;
+}
+
+function runAttackAnimation(attackerCardId, defenderRef) {
+  const attackerElement = getCardElement(attackerCardId);
+  const targetElement = getAttackTargetElement(defenderRef);
+
+  if (!attackerElement || !targetElement) {
+    return sleep(420);
+  }
+
+  return new Promise((resolve) => {
+    const start = attackerElement.getBoundingClientRect();
+    const end = targetElement.getBoundingClientRect();
+    const deltaX = end.left + end.width / 2 - (start.left + start.width / 2);
+    const deltaY = end.top + end.height / 2 - (start.top + start.height / 2);
+    const clone = attackerElement.cloneNode(true);
+
+    clone.querySelectorAll("[data-tooltip]").forEach((element) => element.removeAttribute("data-tooltip"));
+    clone.removeAttribute("data-tooltip");
+    clone.classList.add("attack-motion-clone");
+    clone.style.left = `${start.left}px`;
+    clone.style.top = `${start.top}px`;
+    clone.style.width = `${start.width}px`;
+    clone.style.height = `${start.height}px`;
+    clone.style.setProperty("--attack-x", `${deltaX * 0.82}px`);
+    clone.style.setProperty("--attack-y", `${deltaY * 0.82}px`);
+
+    document.body.appendChild(clone);
+    attackerElement.classList.add("attack-windup");
+
+    requestAnimationFrame(() => {
+      clone.classList.add("is-moving");
+    });
+
+    window.setTimeout(() => {
+      document.body.classList.add("screen-shake");
+      targetElement.classList.add("impact-flash");
+      resolve();
+
+      window.setTimeout(() => {
+        document.body.classList.remove("screen-shake");
+        targetElement.classList.remove("impact-flash");
+      }, 260);
+
+      clone.classList.add("is-returning");
+      window.setTimeout(() => {
+        clone.remove();
+        attackerElement.classList.remove("attack-windup");
+      }, 340);
+    }, 430);
+  });
+}
+
+function showFloatingText(targetElement, text, type = "damage") {
+  if (!targetElement) {
+    return;
+  }
+
+  const rect = targetElement.getBoundingClientRect();
+  const floatingText = document.createElement("div");
+  floatingText.className = `floating-text floating-${type}`;
+  floatingText.textContent = text;
+  floatingText.style.left = `${rect.left + rect.width / 2}px`;
+  floatingText.style.top = `${rect.top + rect.height * 0.38}px`;
+  document.body.appendChild(floatingText);
+
+  window.setTimeout(() => {
+    floatingText.remove();
+  }, 1100);
 }
 
 function flashTurnSplash(message) {
@@ -2807,9 +2990,9 @@ function buildDetailFromElement(element) {
     return card ? { ...card } : null;
   }
 
-  if (type === "hero") {
+  if (type === "tamer") {
     const player = state.players[Number(element.dataset.detailPlayerIndex)];
-    return player ? createHeroCard(player) : null;
+    return player ? createTamerCard(player) : null;
   }
 
   if (type === "realm") {
@@ -2911,12 +3094,22 @@ function handleClick(event) {
   if (event.detail > 1) {
     window.clearTimeout(clickTimer);
     clickTimer = null;
+    pendingClickTarget = null;
     return;
   }
 
-  window.clearTimeout(clickTimer);
+  if (clickTimer && pendingClickTarget) {
+    window.clearTimeout(clickTimer);
+    processClick(pendingClickTarget);
+    clickTimer = null;
+    pendingClickTarget = null;
+  }
+
+  pendingClickTarget = target;
   clickTimer = window.setTimeout(() => {
-    processClick(target);
+    processClick(pendingClickTarget);
+    pendingClickTarget = null;
+    clickTimer = null;
   }, CLICK_DELAY);
 }
 
@@ -2928,15 +3121,21 @@ function processClick(target) {
     return;
   }
 
-  const heroChoice = target.closest("[data-select-hero]");
-  if (heroChoice) {
-    selectHero(heroChoice.dataset.selectHero);
+  const tamerChoice = target.closest("[data-select-tamer]");
+  if (tamerChoice) {
+    selectTamer(tamerChoice.dataset.selectTamer);
     return;
   }
 
   const pactChoice = target.closest("[data-select-pact]");
   if (pactChoice) {
     togglePactSelection(pactChoice.dataset.selectPact);
+    return;
+  }
+
+  const primordialChoice = target.closest("[data-select-primordial]");
+  if (primordialChoice) {
+    selectPrimordial(primordialChoice.dataset.selectPrimordial);
     return;
   }
 
@@ -2970,9 +3169,9 @@ function processClick(target) {
     return;
   }
 
-  const hero = target.closest("[data-hero-index]");
-  if (hero) {
-    handleHeroClick(Number(hero.dataset.heroIndex));
+  const tamer = target.closest("[data-tamer-index]");
+  if (tamer) {
+    handleTamerClick(Number(tamer.dataset.tamerIndex));
     return;
   }
 
